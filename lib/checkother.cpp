@@ -33,10 +33,14 @@ namespace {
     CheckOther instance;
 }
 
+static const struct CWE CWE128(128U);   // Wrap-around Error
+static const struct CWE CWE131(131U);   // Incorrect Calculation of Buffer Size
 static const struct CWE CWE197(197U);   // Numeric Truncation Error
-static const struct CWE CWE369(369U);
+static const struct CWE CWE362(362U);   // Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition')
+static const struct CWE CWE369(369U);   // Divide By Zero
 static const struct CWE CWE398(398U);   // Indicator of Poor Code Quality
 static const struct CWE CWE475(475U);   // Undefined Behavior for Input to API
+static const struct CWE CWE482(482U);   // Comparing instead of Assigning
 static const struct CWE CWE561(561U);   // Dead Code
 static const struct CWE CWE563(563U);   // Assignment to Variable without Use ('Unused Variable')
 static const struct CWE CWE570(570U);   // Expression is Always False
@@ -46,6 +50,7 @@ static const struct CWE CWE687(687U);   // Function Call With Incorrectly Specif
 static const struct CWE CWE688(688U);   // Function Call With Incorrect Variable or Reference as Argument
 static const struct CWE CWE704(704U);   // Incorrect Type Conversion or Cast
 static const struct CWE CWE758(758U);   // Reliance on Undefined, Unspecified, or Implementation-Defined Behavior
+static const struct CWE CWE768(768U);   // Incorrect Short Circuit Evaluation
 static const struct CWE CWE783(783U);   // Operator Precedence Logic Error
 
 //----------------------------------------------------------------------------------
@@ -243,7 +248,7 @@ void CheckOther::checkSuspiciousSemicolon()
 void CheckOther::SuspiciousSemicolonError(const Token* tok)
 {
     reportError(tok, Severity::warning, "suspiciousSemicolon",
-                "Suspicious use of ; at the end of '" + (tok ? tok->str() : std::string()) + "' statement.", CWE(0U), true);
+                "Suspicious use of ; at the end of '" + (tok ? tok->str() : std::string()) + "' statement.", CWE398, true);
 }
 
 
@@ -627,8 +632,8 @@ void CheckOther::checkRedundantAssignment()
                 if (memfunc && tok->strAt(-1) != "(" && tok->strAt(-1) != "=") {
                     const Token* param1 = tok->tokAt(2);
                     writtenArgumentsEnd = param1->next();
-                    if (param1->varId() && param1->strAt(1) == "," && !Token::Match(tok, "strcat|strncat|wcscat|wcsncat")) {
-                        if (tok->str() == "memset" && initialized.find(param1->varId()) == initialized.end() && param1->variable() && param1->variable()->isLocal() && param1->variable()->isArray())
+                    if (param1->varId() && param1->strAt(1) == "," && !Token::Match(tok, "strcat|strncat|wcscat|wcsncat") && param1->variable() && param1->variable()->isLocal() && param1->variable()->isArray()) {
+                        if (tok->str() == "memset" && initialized.find(param1->varId()) == initialized.end())
                             initialized.insert(param1->varId());
                         else {
                             const std::map<unsigned int, const Token*>::const_iterator it = memAssignments.find(param1->varId());
@@ -892,7 +897,7 @@ void CheckOther::suspiciousCaseInSwitchError(const Token* tok, const std::string
 {
     reportError(tok, Severity::warning, "suspiciousCase",
                 "Found suspicious case label in switch(). Operator '" + operatorString + "' probably doesn't work as intended.\n"
-                "Using an operator like '" + operatorString + "' in a case label is suspicious. Did you intend to use a bitwise operator, multiple case labels or if/else instead?", CWE(0U), true);
+                "Using an operator like '" + operatorString + "' in a case label is suspicious. Did you intend to use a bitwise operator, multiple case labels or if/else instead?", CWE398, true);
 }
 
 //---------------------------------------------------------------------------
@@ -944,7 +949,7 @@ void CheckOther::checkSuspiciousEqualityComparison()
 void CheckOther::suspiciousEqualityComparisonError(const Token* tok)
 {
     reportError(tok, Severity::warning, "suspiciousEqualityComparison",
-                "Found suspicious equality comparison. Did you intend to assign a value instead?", CWE(0U), true);
+                "Found suspicious equality comparison. Did you intend to assign a value instead?", CWE482, true);
 }
 
 
@@ -1580,7 +1585,7 @@ void CheckOther::signedCharArrayIndexError(const Token *tok)
                 "Signed 'char' type used as array index.\n"
                 "Signed 'char' type used as array index. If the value "
                 "can be greater than 127 there will be a buffer underflow "
-                "because of sign extension.");
+                "because of sign extension.", CWE128, false);
 }
 
 void CheckOther::unknownSignCharArrayIndexError(const Token *tok)
@@ -1590,7 +1595,7 @@ void CheckOther::unknownSignCharArrayIndexError(const Token *tok)
                 "unknownSignCharArrayIndex",
                 "'char' type used as array index.\n"
                 "'char' type used as array index. Values greater that 127 will be "
-                "treated depending on whether 'char' is signed or unsigned on target platform.");
+                "treated depending on whether 'char' is signed or unsigned on target platform.", CWE758, false);
 }
 
 void CheckOther::charBitOpError(const Token *tok)
@@ -1855,7 +1860,7 @@ void CheckOther::duplicateBranchError(const Token *tok1, const Token *tok2)
     reportError(toks, Severity::style, "duplicateBranch", "Found duplicate branches for 'if' and 'else'.\n"
                 "Finding the same code in an 'if' and related 'else' branch is suspicious and "
                 "might indicate a cut and paste or logic error. Please examine this code "
-                "carefully to determine if it is correct.", CWE(0U), true);
+                "carefully to determine if it is correct.", CWE398, true);
 }
 
 
@@ -2056,7 +2061,7 @@ void CheckOther::duplicateExpressionTernaryError(const Token *tok)
 {
     reportError(tok, Severity::style, "duplicateExpressionTernary", "Same expression in both branches of ternary operator.\n"
                 "Finding the same expression in both branches of ternary operator is suspicious as "
-                "the same code is executed regardless of the condition.");
+                "the same code is executed regardless of the condition.", CWE398, false);
 }
 
 void CheckOther::selfAssignmentError(const Token *tok, const std::string &varname)
@@ -2380,11 +2385,11 @@ void CheckOther::incompleteArrayFillError(const Token* tok, const std::string& b
     if (boolean)
         reportError(tok, Severity::portability, "incompleteArrayFill",
                     "Array '" + buffer + "' might be filled incompletely. Did you forget to multiply the size given to '" + function + "()' with 'sizeof(*" + buffer + ")'?\n"
-                    "The array '" + buffer + "' is filled incompletely. The function '" + function + "()' needs the size given in bytes, but the type 'bool' is larger than 1 on some platforms. Did you forget to multiply the size with 'sizeof(*" + buffer + ")'?", CWE(0U), true);
+                    "The array '" + buffer + "' is filled incompletely. The function '" + function + "()' needs the size given in bytes, but the type 'bool' is larger than 1 on some platforms. Did you forget to multiply the size with 'sizeof(*" + buffer + ")'?", CWE131, true);
     else
         reportError(tok, Severity::warning, "incompleteArrayFill",
                     "Array '" + buffer + "' is filled incompletely. Did you forget to multiply the size given to '" + function + "()' with 'sizeof(*" + buffer + ")'?\n"
-                    "The array '" + buffer + "' is filled incompletely. The function '" + function + "()' needs the size given in bytes, but an element of the given array is larger than one byte. Did you forget to multiply the size with 'sizeof(*" + buffer + ")'?", CWE(0U), true);
+                    "The array '" + buffer + "' is filled incompletely. The function '" + function + "()' needs the size given in bytes, but an element of the given array is larger than one byte. Did you forget to multiply the size with 'sizeof(*" + buffer + ")'?", CWE131, true);
 }
 
 //---------------------------------------------------------------------------
@@ -2510,7 +2515,7 @@ void CheckOther::checkRedundantPointerOp()
 void CheckOther::redundantPointerOpError(const Token* tok, const std::string &varname, bool inconclusive)
 {
     reportError(tok, Severity::style, "redundantPointerOp",
-                "Redundant pointer operation on " + varname + " - it's already a pointer.", CWE(0U), inconclusive);
+                "Redundant pointer operation on " + varname + " - it's already a pointer.", CWE398, inconclusive);
 }
 
 void CheckOther::checkInterlockedDecrement()
@@ -2554,7 +2559,7 @@ void CheckOther::checkInterlockedDecrement()
 void CheckOther::raceAfterInterlockedDecrementError(const Token* tok)
 {
     reportError(tok, Severity::error, "raceAfterInterlockedDecrement",
-                "Race condition: non-interlocked access after InterlockedDecrement(). Use InterlockedDecrement() return value instead.");
+                "Race condition: non-interlocked access after InterlockedDecrement(). Use InterlockedDecrement() return value instead.", CWE362, false);
 }
 
 void CheckOther::checkUnusedLabel()
@@ -2584,11 +2589,11 @@ void CheckOther::unusedLabelError(const Token* tok, bool inSwitch)
     if (inSwitch) {
         if (!tok || _settings->isEnabled("warning"))
             reportError(tok, Severity::warning, "unusedLabelSwitch",
-                        "Label '" + (tok ? tok->str() : emptyString) + "' is not used. Should this be a 'case' of the enclosing switch()?");
+                        "Label '" + (tok ? tok->str() : emptyString) + "' is not used. Should this be a 'case' of the enclosing switch()?", CWE398, false);
     } else {
         if (!tok || _settings->isEnabled("style"))
             reportError(tok, Severity::style, "unusedLabel",
-                        "Label '" + (tok ? tok->str() : emptyString) + "' is not used.");
+                        "Label '" + (tok ? tok->str() : emptyString) + "' is not used.", CWE398, false);
     }
 }
 
@@ -2678,6 +2683,6 @@ void CheckOther::checkEvaluationOrder()
 void CheckOther::unknownEvaluationOrder(const Token* tok)
 {
     reportError(tok, Severity::error, "unknownEvaluationOrder",
-                "Expression '" + (tok ? tok->expressionString() : std::string("x = x++;")) + "' depends on order of evaluation of side effects");
+                "Expression '" + (tok ? tok->expressionString() : std::string("x = x++;")) + "' depends on order of evaluation of side effects", CWE768, false);
 }
 

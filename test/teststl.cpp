@@ -209,6 +209,32 @@ private:
               "    l2.insert(it, l1.end());\n"
               "}");
         ASSERT_EQUALS("", errout.str());
+
+        check("void foo() {\n" // #7658
+              "    list<int> l1;\n"
+              "    list<int> l2;\n"
+              "    list<int>::iterator it = l1.begin();\n"
+              "    list<int>::iterator end = l1.end();\n"
+              "    l2.insert(it, end);\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        // only warn for insert when there are preciself 2 arguments.
+        check("void foo() {\n"
+              "    list<int> l1;\n"
+              "    list<int> l2;\n"
+              "    list<int>::iterator it = l1.begin();\n"
+              "    l2.insert(it);\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+        check("void foo() {\n"
+              "    list<int> l1;\n"
+              "    list<int> l2;\n"
+              "    list<int>::iterator it = l1.begin();\n"
+              "    l2.insert(it,0,1);\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
     }
 
     void iterator4() {

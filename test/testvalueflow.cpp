@@ -327,6 +327,16 @@ private:
         ASSERT_EQUALS(2, values.front().intvalue);
         ASSERT_EQUALS(3, values.back().intvalue);
 
+        code = "x = (2<5) ? 2 : 3;\n";
+        values = tokenValues(code, "?");
+        ASSERT_EQUALS(1U, values.size());
+        ASSERT_EQUALS(2, values.front().intvalue);
+
+        code = "x = 123 ? : 456;\n";
+        values = tokenValues(code, "?");
+        ASSERT_EQUALS(1U, values.size());
+        ASSERT_EQUALS(123, values.empty() ? 0 : values.front().intvalue);
+
         // !
         code  = "void f(int x) {\n"
                 "    a = !x;\n"
@@ -335,6 +345,15 @@ private:
         values = tokenValues(code,"!");
         ASSERT_EQUALS(1U, values.size());
         ASSERT_EQUALS(1, values.back().intvalue);
+
+        // unary minus
+        code  = "void f(int x) {\n"
+                "    a = -x;\n"
+                "    if (x==10) {}\n"
+                "}";
+        values = tokenValues(code,"-");
+        ASSERT_EQUALS(1U, values.size());
+        ASSERT_EQUALS(-10, values.back().intvalue);
 
         // function call => calculation
         code  = "void f(int x) {\n"
