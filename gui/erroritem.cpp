@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,35 +17,76 @@
  */
 
 #include "erroritem.h"
+#include "common.h"
+
+QErrorPathItem::QErrorPathItem(const ErrorLogger::ErrorMessage::FileLocation &loc)
+    : file(QString::fromStdString(loc.getfile(false)))
+    , line(loc.line)
+    , column(loc.column)
+    , info(QString::fromStdString(loc.getinfo()))
+{
+}
+
+bool operator==(const QErrorPathItem &i1, const QErrorPathItem &i2)
+{
+    return i1.file == i2.file && i1.column == i2.column && i1.line == i2.line && i1.info == i2.info;
+}
 
 ErrorItem::ErrorItem()
     : severity(Severity::none)
     , inconclusive(false)
+    , cwe(-1)
 {
 }
 
-ErrorItem::ErrorItem(const ErrorLine &line)
-    : file(line.file)
-    , files(line.file)
-    , errorId(line.errorId)
-    , severity(line.severity)
-    , inconclusive(line.inconclusive)
-    , summary(line.summary)
-    , message(line.message)
+ErrorItem::ErrorItem(const ErrorLogger::ErrorMessage &errmsg)
+    : errorId(QString::fromStdString(errmsg.id))
+    , severity(errmsg.severity)
+    , inconclusive(errmsg.inconclusive)
+    , summary(QString::fromStdString(errmsg.shortMessage()))
+    , message(QString::fromStdString(errmsg.verboseMessage()))
+    , cwe(errmsg.cwe.id)
+    , symbolNames(QString::fromStdString(errmsg.symbolNames()))
 {
-    lines.append(line.line);
+    for (std::list<ErrorLogger::ErrorMessage::FileLocation>::const_iterator loc = errmsg.callStack.begin();
+         loc != errmsg.callStack.end();
+         ++loc) {
+        errorPath << QErrorPathItem(*loc);
+    }
+}
+
+QString ErrorItem::tool() const
+{
+    if (errorId == CLANG_ANALYZER)
+        return CLANG_ANALYZER;
+    if (errorId.startsWith(CLANG_TIDY))
+        return CLANG_TIDY;
+    if (errorId.startsWith("clang-"))
+        return "clang";
+    return "cppcheck";
 }
 
 QString ErrorItem::ToString() const
 {
-    QString str = file + " - " + errorId + " - ";
+    QString str = errorPath.back().file + " - " + errorId + " - ";
     if (inconclusive)
         str += "inconclusive ";
     str += GuiSeverity::toString(severity) +"\n";
     str += summary + "\n";
     str += message + "\n";
-    for (int i = 0; i < files.size(); i++) {
-        str += "  " + files[i] + ": " + QString::number(lines[i]) + "\n";
+    for (int i = 0; i < errorPath.size(); i++) {
+        str += "  " + errorPath[i].file + ": " + QString::number(errorPath[i].line) + "\n";
     }
     return str;
+}
+
+bool ErrorItem::sameCID(const ErrorItem &errorItem1, const ErrorItem &errorItem2)
+{
+    // TODO: Implement some better CID calculation
+    return errorItem1.errorId == errorItem2.errorId &&
+           errorItem1.errorPath == errorItem2.errorPath &&
+           errorItem1.file0 == errorItem2.file0 &&
+           errorItem1.message == errorItem2.message &&
+           errorItem1.inconclusive == errorItem2.inconclusive &&
+           errorItem1.severity == errorItem2.severity;
 }

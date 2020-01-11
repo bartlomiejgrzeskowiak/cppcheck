@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,9 +34,9 @@ ApplicationDialog::ApplicationDialog(const QString &title,
 {
     mUI.setupUi(this);
 
-    connect(mUI.mButtonBrowse, SIGNAL(clicked()), this, SLOT(Browse()));
-    connect(mUI.mButtons, SIGNAL(accepted()), this, SLOT(Ok()));
-    connect(mUI.mButtons, SIGNAL(rejected()), this, SLOT(reject()));
+    connect(mUI.mButtonBrowse, &QPushButton::clicked, this, &ApplicationDialog::browse);
+    connect(mUI.mButtons, &QDialogButtonBox::accepted, this, &ApplicationDialog::ok);
+    connect(mUI.mButtons, &QDialogButtonBox::rejected, this, &ApplicationDialog::reject);
     mUI.mPath->setText(app.getPath());
     mUI.mName->setText(app.getName());
     mUI.mParameters->setText(app.getParameters());
@@ -50,7 +50,7 @@ ApplicationDialog::~ApplicationDialog()
     //dtor
 }
 
-void ApplicationDialog::Browse()
+void ApplicationDialog::browse()
 {
     QString filter;
 #ifdef Q_OS_WIN
@@ -60,17 +60,17 @@ void ApplicationDialog::Browse()
 #endif // Q_OS_WIN
     QString selectedFile = QFileDialog::getOpenFileName(this,
                            tr("Select viewer application"),
-                           GetPath(SETTINGS_LAST_APP_PATH),
+                           getPath(SETTINGS_LAST_APP_PATH),
                            filter);
 
     if (!selectedFile.isEmpty()) {
-        SetPath(SETTINGS_LAST_APP_PATH, selectedFile);
+        setPath(SETTINGS_LAST_APP_PATH, selectedFile);
         QString path(QDir::toNativeSeparators(selectedFile));
         mUI.mPath->setText(path);
     }
 }
 
-void ApplicationDialog::Ok()
+void ApplicationDialog::ok()
 {
     if (mUI.mName->text().isEmpty() || mUI.mPath->text().isEmpty()) {
         QMessageBox msg(QMessageBox::Warning,

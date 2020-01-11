@@ -1,5 +1,5 @@
 // Cppcheck - A tool for static C/C++ code analysis
-// Copyright (C) 2007-2016 Cppcheck team.
+// Copyright (C) 2007-2019 Cppcheck team.
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -28,14 +28,13 @@
 class options {
 public:
     /** Call from main() to populate object */
-    options(int argc, const char* argv[]);
+    options(int argc, const char* const argv[]);
     /** Don't print the name of each method being tested. */
     bool quiet() const;
-    /** __FILE__:__LINE__: Error message. Makes it easier for editors to find
-     * failing tests/ */
-    bool gcc_style_errors() const;
+    /** Print help. */
+    bool help() const;
     /** Which test should be run. Empty string means 'all tests' */
-    const std::string& which_test() const;
+    const std::set<std::string>& which_test() const;
 
 private:
     options();
@@ -43,10 +42,9 @@ private:
     const options& operator =(const options& non_assign);
 
 private:
-    std::set<std::string> _options;
-    std::string _which_test;
-    const bool _gcc_style_errors;
-    const bool _quiet;
+    std::set<std::string> mWhichTests;
+    const bool mQuiet;
+    const bool mHelp;
 };
 
 #endif

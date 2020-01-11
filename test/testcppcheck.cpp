@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,11 +16,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "cppcheck.h"
-#include "cppcheckexecutor.h"
-#include "testsuite.h"
-#include "path.h"
 #include "check.h"
+#include "cppcheck.h"
+#include "errorlogger.h"
+#include "testsuite.h"
 
 #include <algorithm>
 #include <list>
@@ -38,15 +37,15 @@ private:
     public:
         std::list<std::string> id;
 
-        void reportOut(const std::string & /*outmsg*/) {
-        }
+        void reportOut(const std::string & /*outmsg*/) OVERRIDE {}
+        void reportVerification(const std::string & /*str*/) OVERRIDE {}
 
-        void reportErr(const ErrorLogger::ErrorMessage &msg) {
-            id.push_back(msg._id);
+        void reportErr(const ErrorLogger::ErrorMessage &msg) OVERRIDE {
+            id.push_back(msg.id);
         }
     };
 
-    void run() {
+    void run() OVERRIDE {
         TEST_CASE(instancesSorted);
         TEST_CASE(classInfoFormat);
         TEST_CASE(getErrorMessages);
@@ -91,6 +90,18 @@ private:
             }
         }
         ASSERT_EQUALS("", duplicate);
+
+        // Check for error ids from this class.
+        bool foundPurgedConfiguration = false;
+        bool foundTooManyConfigs = false;
+        for (const std::string & it : errorLogger.id) {
+            if (it == "purgedConfiguration")
+                foundPurgedConfiguration = true;
+            else if (it == "toomanyconfigs")
+                foundTooManyConfigs = true;
+        }
+        ASSERT(foundPurgedConfiguration);
+        ASSERT(foundTooManyConfigs);
     }
 };
 

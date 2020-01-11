@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <QtTest>
+#include <QtTest/QtTest>
 #include <QObject>
 #include "errorlogger.h"
 
@@ -31,8 +31,8 @@ private slots:
 private:
     // Empty implementations of ErrorLogger methods.
     // We don't care about the output in the benchmark tests.
-    void reportOut(const std::string & outmsg) {
+    void reportOut(const std::string & outmsg) override {
     }
-    void reportErr(const ErrorLogger::ErrorMessage &msg) {
+    void reportErr(const ErrorLogger::ErrorMessage &msg) override {
     }
 };

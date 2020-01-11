@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,9 +21,10 @@
 #define mathlibH
 //---------------------------------------------------------------------------
 
-#include <string>
-#include <sstream>
 #include "config.h"
+
+#include <sstream>
+#include <string>
 
 /// @addtogroup Core
 /// @{
@@ -37,10 +38,10 @@ public:
     /** @brief value class */
     class value {
     private:
-        long long intValue;
-        double doubleValue;
-        enum { INT, LONG, LONGLONG, FLOAT } type;
-        bool isUnsigned;
+        long long mIntValue;
+        double mDoubleValue;
+        enum { INT, LONG, LONGLONG, FLOAT } mType;
+        bool mIsUnsigned;
 
         void promote(const value &v);
 
@@ -48,14 +49,14 @@ public:
         explicit value(const std::string &s);
         std::string str() const;
         bool isInt() const {
-            return type != FLOAT;
+            return mType != FLOAT;
         }
         bool isFloat() const {
-            return type == FLOAT;
+            return mType == FLOAT;
         }
 
         double getDoubleValue() const {
-            return isFloat() ? doubleValue : (double)intValue;
+            return isFloat() ? mDoubleValue : (double)mIntValue;
         }
 
         static value calc(char op, const value &v1, const value &v2);
@@ -67,6 +68,7 @@ public:
 
     typedef long long bigint;
     typedef unsigned long long biguint;
+    static const int bigint_bits;
 
     static bigint toLongNumber(const std::string & str);
     static biguint toULongNumber(const std::string & str);
@@ -89,7 +91,13 @@ public:
     static bool isOct(const std::string& str);
     static bool isBin(const std::string& str);
 
-    static bool isValidIntegerSuffix(std::string::const_iterator it, std::string::const_iterator end);
+    static std::string getSuffix(const std::string& value);
+    /**
+     * \param[in] str string
+     * \param[in] supportMicrosoftExtensions support Microsoft extension: i64
+     *  \return true if str is a non-empty valid integer suffix
+     */
+    static bool isValidIntegerSuffix(const std::string& str, bool supportMicrosoftExtensions=true);
 
     static std::string add(const std::string & first, const std::string & second);
     static std::string subtract(const std::string & first, const std::string & second);
@@ -109,22 +117,23 @@ public:
     static bool isGreaterEqual(const std::string & first, const std::string & second);
     static bool isLess(const std::string & first, const std::string & second);
     static bool isLessEqual(const std::string & first, const std::string & second);
-    static bool isNullValue(const std::string &tok);
+    static bool isNullValue(const std::string & str);
     /**
      * Return true if given character is 0,1,2,3,4,5,6 or 7.
-     * @param c The character to check
+     * @param[in] c The character to check
      * @return true if given character is octal digit.
      */
     static bool isOctalDigit(char c);
-    /*
-     * \param str character literal
+
+    /**
+     * \param[in] str character literal
      * @return Number of internal representation of the character literal
      * */
     static MathLib::bigint characterLiteralToLongNumber(const std::string& str);
 
     /**
-     * \param iCode Code being considered
-     * \param iPos A posision within iCode
+     * \param[in] iCode Code being considered
+     * \param[in] iPos A posision within iCode
      * \return Whether iCode[iPos] is a C++14 digit separator
      */
     static bool isDigitSeparator(const std::string& iCode, std::string::size_type iPos);

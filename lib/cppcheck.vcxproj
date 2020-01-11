@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug-PCRE|Win32">
       <Configuration>Debug-PCRE</Configuration>
@@ -37,6 +37,7 @@
   <ItemGroup>
     <ClCompile Include="..\externals\simplecpp\simplecpp.cpp" />
     <ClCompile Include="..\externals\tinyxml\tinyxml2.cpp" />
+    <ClCompile Include="analyzerinfo.cpp" />
     <ClCompile Include="astutils.cpp" />
     <ClCompile Include="check.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
@@ -73,14 +74,20 @@
     <ClCompile Include="checkunusedfunctions.cpp" />
     <ClCompile Include="checkunusedvar.cpp" />
     <ClCompile Include="checkvaarg.cpp" />
+    <ClCompile Include="clangimport.cpp" />
     <ClCompile Include="cppcheck.cpp" />
+    <ClCompile Include="ctu.cpp" />
     <ClCompile Include="errorlogger.cpp" />
+    <ClCompile Include="exprengine.cpp" />
     <ClCompile Include="library.cpp" />
     <ClCompile Include="mathlib.cpp" />
     <ClCompile Include="path.cpp" />
+    <ClCompile Include="pathanalysis.cpp" />
+    <ClCompile Include="pathmatch.cpp" />
     <ClCompile Include="platform.cpp" />
     <ClCompile Include="preprocessor.cpp" />
     <ClCompile Include="importproject.cpp" />
+    <ClCompile Include="programmemory.cpp" />
     <ClCompile Include="settings.cpp" />
     <ClCompile Include="suppressions.cpp" />
     <ClCompile Include="symboldatabase.cpp" />
@@ -94,6 +101,7 @@
   <ItemGroup>
     <ClInclude Include="..\externals\simplecpp\simplecpp.h" />
     <ClInclude Include="..\externals\tinyxml\tinyxml2.h" />
+    <ClInclude Include="analyzerinfo.h" />
     <ClInclude Include="astutils.h" />
     <ClInclude Include="check.h" />
     <ClInclude Include="check64bit.h" />
@@ -121,12 +129,15 @@
     <ClInclude Include="checkunusedfunctions.h" />
     <ClInclude Include="checkunusedvar.h" />
     <ClInclude Include="checkvaarg.h" />
+    <ClInclude Include="clangimport.h" />
     <ClInclude Include="config.h" />
     <ClInclude Include="cppcheck.h" />
+    <ClInclude Include="ctu.h" />
     <ClInclude Include="errorlogger.h" />
     <ClInclude Include="library.h" />
     <ClInclude Include="mathlib.h" />
     <ClInclude Include="path.h" />
+    <ClInclude Include="pathmatch.h" />
     <ClInclude Include="platform.h" />
     <ClInclude Include="preprocessor.h" />
     <ClInclude Include="importproject.h" />
@@ -145,58 +156,62 @@
   <ItemGroup>
     <ResourceCompile Include="version.rc" />
   </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="cppcheck.natvis" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{C183DB5B-AD6C-423D-80CA-1F9549555A1A}</ProjectGuid>
     <RootNamespace>cppcheck_lib</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
     <WholeProgramOptimization>false</WholeProgramOptimization>
-    <PlatformToolset>v140_xp</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug-PCRE|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
     <WholeProgramOptimization>false</WholeProgramOptimization>
-    <PlatformToolset>v140_xp</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
     <WholeProgramOptimization>false</WholeProgramOptimization>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug-PCRE|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
     <WholeProgramOptimization>false</WholeProgramOptimization>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
     <WholeProgramOptimization>false</WholeProgramOptimization>
-    <PlatformToolset>v140_xp</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release-PCRE|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
     <WholeProgramOptimization>false</WholeProgramOptimization>
-    <PlatformToolset>v140_xp</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
     <WholeProgramOptimization>false</WholeProgramOptimization>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release-PCRE|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
     <WholeProgramOptimization>false</WholeProgramOptimization>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings" />
@@ -271,12 +286,13 @@
       <PreprocessorDefinitions>CPPCHECKLIB_EXPORT;TINYXML2_EXPORT;SIMPLECPP_EXPORT;WIN32;_CRT_SECURE_NO_WARNINGS;WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <WarningLevel>Level4</WarningLevel>
       <AdditionalIncludeDirectories>..\externals;..\externals\simplecpp;..\externals\tinyxml;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <DisableSpecificWarnings>4251;4482;4512</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4018;4244;4251;4389;4482;4512;4701</DisableSpecificWarnings>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>check.h</PrecompiledHeaderFile>
       <ForcedIncludeFiles>check.h</ForcedIncludeFiles>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>../externals;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
@@ -284,9 +300,12 @@
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
       <LargeAddressAware>true</LargeAddressAware>
+      <StackReserveSize>8000000</StackReserveSize>
+      <StackCommitSize>8000000</StackCommitSize>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy "$(SolutionDir)cfg" "$(OutDir)cfg" /E /I /D /Y</Command>
+      <Command>xcopy "$(SolutionDir)cfg" "$(OutDir)cfg" /E /I /D /Y
+xcopy "$(SolutionDir)platforms" "$(OutDir)platforms" /E /I /D /Y</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug-PCRE|Win32'">
@@ -297,12 +316,13 @@
       <PreprocessorDefinitions>CPPCHECKLIB_EXPORT;TINYXML2_EXPORT;SIMPLECPP_EXPORT;WIN32;HAVE_RULES;_CRT_SECURE_NO_WARNINGS;WIN32_LEAN_AND_MEAN;TIXML_USE_STL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <WarningLevel>Level4</WarningLevel>
       <AdditionalIncludeDirectories>..\externals;..\externals\simplecpp;..\externals\tinyxml;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <DisableSpecificWarnings>4251;4482;4512</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4018;4244;4251;4389;4482;4512;4701</DisableSpecificWarnings>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>check.h</PrecompiledHeaderFile>
       <ForcedIncludeFiles>check.h</ForcedIncludeFiles>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>pcre.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -310,9 +330,12 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <LargeAddressAware>true</LargeAddressAware>
+      <StackReserveSize>8000000</StackReserveSize>
+      <StackCommitSize>8000000</StackCommitSize>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy "$(SolutionDir)cfg" "$(OutDir)cfg" /E /I /D /Y</Command>
+      <Command>xcopy "$(SolutionDir)cfg" "$(OutDir)cfg" /E /I /D /Y
+xcopy "$(SolutionDir)platforms" "$(OutDir)platforms" /E /I /D /Y</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -323,20 +346,24 @@
       <PreprocessorDefinitions>CPPCHECKLIB_EXPORT;TINYXML2_EXPORT;SIMPLECPP_EXPORT;WIN32;_CRT_SECURE_NO_WARNINGS;WIN32_LEAN_AND_MEAN;_WIN64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <WarningLevel>Level4</WarningLevel>
       <AdditionalIncludeDirectories>..\externals;..\externals\simplecpp;..\externals\tinyxml;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <DisableSpecificWarnings>4251;4482;4512</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4018;4244;4251;4389;4482;4512;4701</DisableSpecificWarnings>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>check.h</PrecompiledHeaderFile>
       <ForcedIncludeFiles>check.h</ForcedIncludeFiles>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>../externals;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SuppressStartupBanner>true</SuppressStartupBanner>
+      <StackReserveSize>8000000</StackReserveSize>
+      <StackCommitSize>8000000</StackCommitSize>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy "$(SolutionDir)cfg" "$(OutDir)cfg" /E /I /D /Y</Command>
+      <Command>xcopy "$(SolutionDir)cfg" "$(OutDir)cfg" /E /I /D /Y
+xcopy "$(SolutionDir)platforms" "$(OutDir)platforms" /E /I /D /Y</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug-PCRE|x64'">
@@ -347,21 +374,25 @@
       <PreprocessorDefinitions>CPPCHECKLIB_EXPORT;TINYXML2_EXPORT;SIMPLECPP_EXPORT;WIN32;HAVE_RULES;_CRT_SECURE_NO_WARNINGS;WIN32_LEAN_AND_MEAN;_WIN64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <WarningLevel>Level4</WarningLevel>
       <AdditionalIncludeDirectories>..\externals;..\externals\simplecpp;..\externals\tinyxml;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <DisableSpecificWarnings>4251;4482;4512</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4018;4244;4251;4389;4482;4512;4701</DisableSpecificWarnings>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>check.h</PrecompiledHeaderFile>
       <ForcedIncludeFiles>check.h</ForcedIncludeFiles>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>pcre64.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>../externals;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SuppressStartupBanner>true</SuppressStartupBanner>
+      <StackReserveSize>8000000</StackReserveSize>
+      <StackCommitSize>8000000</StackCommitSize>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy "$(SolutionDir)cfg" "$(OutDir)cfg" /E /I /D /Y</Command>
+      <Command>xcopy "$(SolutionDir)cfg" "$(OutDir)cfg" /E /I /D /Y
+xcopy "$(SolutionDir)platforms" "$(OutDir)platforms" /E /I /D /Y</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -375,7 +406,7 @@
       <StringPooling>true</StringPooling>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <AdditionalIncludeDirectories>..\externals;..\externals\simplecpp;..\externals\tinyxml;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <DisableSpecificWarnings>4251;4482;4512</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4018;4244;4251;4389;4482;4512;4701</DisableSpecificWarnings>
       <PreprocessorDefinitions>CPPCHECKLIB_EXPORT;TINYXML2_EXPORT;SIMPLECPP_EXPORT;NDEBUG;WIN32;_CRT_SECURE_NO_WARNINGS;WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <DebugInformationFormat>
@@ -387,6 +418,7 @@
       <ForcedIncludeFiles>check.h</ForcedIncludeFiles>
       <AdditionalOptions>/Zc:inline /Zc:throwingNew %(AdditionalOptions)</AdditionalOptions>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>../externals;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
@@ -395,9 +427,12 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <SetChecksum>true</SetChecksum>
       <LargeAddressAware>true</LargeAddressAware>
+      <StackReserveSize>8000000</StackReserveSize>
+      <StackCommitSize>8000000</StackCommitSize>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy "$(SolutionDir)cfg" "$(OutDir)cfg" /E /I /D /Y</Command>
+      <Command>xcopy "$(SolutionDir)cfg" "$(OutDir)cfg" /E /I /D /Y
+xcopy "$(SolutionDir)platforms" "$(OutDir)platforms" /E /I /D /Y</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release-PCRE|Win32'">
@@ -411,7 +446,7 @@
       <StringPooling>true</StringPooling>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <AdditionalIncludeDirectories>..\externals;..\externals\simplecpp;..\externals\tinyxml;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <DisableSpecificWarnings>4251;4482;4512</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4018;4244;4251;4389;4482;4512;4701</DisableSpecificWarnings>
       <PreprocessorDefinitions>CPPCHECKLIB_EXPORT;TINYXML2_EXPORT;SIMPLECPP_EXPORT;NDEBUG;WIN32;HAVE_RULES;_CRT_SECURE_NO_WARNINGS;WIN32_LEAN_AND_MEAN;TIXML_USE_STL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <DebugInformationFormat>
@@ -423,6 +458,7 @@
       <ForcedIncludeFiles>check.h</ForcedIncludeFiles>
       <AdditionalOptions>/Zc:inline /Zc:throwingNew %(AdditionalOptions)</AdditionalOptions>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>pcre.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -432,9 +468,12 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <SetChecksum>true</SetChecksum>
       <LargeAddressAware>true</LargeAddressAware>
+      <StackReserveSize>8000000</StackReserveSize>
+      <StackCommitSize>8000000</StackCommitSize>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy "$(SolutionDir)cfg" "$(OutDir)cfg" /E /I /D /Y</Command>
+      <Command>xcopy "$(SolutionDir)cfg" "$(OutDir)cfg" /E /I /D /Y
+xcopy "$(SolutionDir)platforms" "$(OutDir)platforms" /E /I /D /Y</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -448,7 +487,7 @@
       <StringPooling>true</StringPooling>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <AdditionalIncludeDirectories>..\externals;..\externals\simplecpp;..\externals\tinyxml;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <DisableSpecificWarnings>4251;4482;4512</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4018;4244;4251;4389;4482;4512;4701</DisableSpecificWarnings>
       <PreprocessorDefinitions>CPPCHECKLIB_EXPORT;TINYXML2_EXPORT;SIMPLECPP_EXPORT;NDEBUG;WIN32;_CRT_SECURE_NO_WARNINGS;WIN32_LEAN_AND_MEAN;_WIN64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <DebugInformationFormat>
@@ -460,16 +499,20 @@
       <ForcedIncludeFiles>check.h</ForcedIncludeFiles>
       <AdditionalOptions>/Zc:inline /Zc:throwingNew %(AdditionalOptions)</AdditionalOptions>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>../externals;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <SetChecksum>true</SetChecksum>
+      <StackReserveSize>8000000</StackReserveSize>
+      <StackCommitSize>8000000</StackCommitSize>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy "$(SolutionDir)cfg" "$(OutDir)cfg" /E /I /D /Y</Command>
+      <Command>xcopy "$(SolutionDir)cfg" "$(OutDir)cfg" /E /I /D /Y
+xcopy "$(SolutionDir)platforms" "$(OutDir)platforms" /E /I /D /Y</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release-PCRE|x64'">
@@ -483,7 +526,7 @@
       <StringPooling>true</StringPooling>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <AdditionalIncludeDirectories>..\externals;..\externals\simplecpp;..\externals\tinyxml;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <DisableSpecificWarnings>4251;4482;4512</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4018;4244;4251;4389;4482;4512;4701</DisableSpecificWarnings>
       <PreprocessorDefinitions>CPPCHECKLIB_EXPORT;TINYXML2_EXPORT;SIMPLECPP_EXPORT;NDEBUG;WIN32;HAVE_RULES;_CRT_SECURE_NO_WARNINGS;WIN32_LEAN_AND_MEAN;_WIN64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <DebugInformationFormat>
@@ -495,6 +538,7 @@
       <ForcedIncludeFiles>check.h</ForcedIncludeFiles>
       <AdditionalOptions>/Zc:inline /Zc:throwingNew %(AdditionalOptions)</AdditionalOptions>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>pcre64.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -503,9 +547,12 @@
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <SetChecksum>true</SetChecksum>
+      <StackReserveSize>8000000</StackReserveSize>
+      <StackCommitSize>8000000</StackCommitSize>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy "$(SolutionDir)cfg" "$(OutDir)cfg" /E /I /D /Y</Command>
+      <Command>xcopy "$(SolutionDir)cfg" "$(OutDir)cfg" /E /I /D /Y
+xcopy "$(SolutionDir)platforms" "$(OutDir)platforms" /E /I /D /Y</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

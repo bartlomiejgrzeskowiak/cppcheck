@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,9 +16,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "tokenize.h"
+
 #include "check64bit.h"
+#include "settings.h"
 #include "testsuite.h"
+#include "tokenize.h"
 
 
 class Test64BitPortability : public TestFixture {
@@ -29,7 +31,7 @@ public:
 private:
     Settings settings;
 
-    void run() {
+    void run() OVERRIDE {
         settings.addEnabled("portability");
 
         TEST_CASE(novardecl);
@@ -209,7 +211,7 @@ private:
               "}");
         ASSERT_EQUALS("", errout.str());
 
-        // #7247: dont check return statements in nested functions..
+        // #7247: don't check return statements in nested functions..
         check("int foo() {\n"
               "  struct {\n"
               "    const char * name() { return \"abc\"; }\n"

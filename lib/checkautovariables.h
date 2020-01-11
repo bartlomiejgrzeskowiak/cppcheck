@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,8 +22,15 @@
 #define checkautovariablesH
 //---------------------------------------------------------------------------
 
-#include "config.h"
 #include "check.h"
+#include "config.h"
+
+#include <string>
+
+class ErrorLogger;
+class Settings;
+class Token;
+class Tokenizer;
 
 /// @addtogroup Checks
 /** @brief Various small checks for automatic variables */
@@ -42,16 +49,11 @@ public:
     }
 
     /** @brief Run checks against the normal token list */
-    void runChecks(const Tokenizer *tokenizer, const Settings *settings, ErrorLogger *errorLogger) {
+    void runChecks(const Tokenizer *tokenizer, const Settings *settings, ErrorLogger *errorLogger) OVERRIDE {
         CheckAutoVariables checkAutoVariables(tokenizer, settings, errorLogger);
         checkAutoVariables.assignFunctionArg();
-        checkAutoVariables.returnReference();
-    }
-
-    void runSimplifiedChecks(const Tokenizer *tokenizer, const Settings *settings, ErrorLogger *errorLogger) {
-        CheckAutoVariables checkAutoVariables(tokenizer, settings, errorLogger);
+        checkAutoVariables.checkVarLifetime();
         checkAutoVariables.autoVariables();
-        checkAutoVariables.returnPointerToLocalArray();
     }
 
     /** assign function argument */
@@ -60,55 +62,51 @@ public:
     /** Check auto variables */
     void autoVariables();
 
-    /** Returning pointer to local array */
-    void returnPointerToLocalArray();
+    void checkVarLifetime();
 
-    /** Returning reference to local/temporary variable */
-    void returnReference();
+    void checkVarLifetimeScope(const Token * start, const Token * end);
 
 private:
-    static bool isPtrArg(const Token *tok);
-    static bool isArrayArg(const Token *tok);
-    static bool isRefPtrArg(const Token *tok);
-    static bool isNonReferenceArg(const Token *tok);
-    static bool isAutoVar(const Token *tok);
-    static bool isAutoVarArray(const Token *tok);
-
-    /**
-     * Returning a temporary object?
-     * @param tok pointing at the "return" token
-     * @return true if a temporary object is returned
-     */
-    static bool returnTemporary(const Token *tok);
-
     void errorReturnAddressToAutoVariable(const Token *tok);
+    void errorReturnAddressToAutoVariable(const Token *tok, const ValueFlow::Value *value);
     void errorReturnPointerToLocalArray(const Token *tok);
     void errorAutoVariableAssignment(const Token *tok, bool inconclusive);
-    void errorReturnReference(const Token *tok);
-    void errorReturnTempReference(const Token *tok);
-    void errorInvalidDeallocation(const Token *tok);
+    void errorReturnDanglingLifetime(const Token *tok, const ValueFlow::Value* val);
+    void errorInvalidLifetime(const Token *tok, const ValueFlow::Value* val);
+    void errorDanglngLifetime(const Token *tok, const ValueFlow::Value *val);
+    void errorDanglingTemporaryLifetime(const Token* tok, const ValueFlow::Value* val);
+    void errorReturnReference(const Token* tok, ErrorPath errorPath, bool inconclusive);
+    void errorDanglingReference(const Token *tok, const Variable *var, ErrorPath errorPath);
+    void errorReturnTempReference(const Token* tok, ErrorPath errorPath, bool inconclusive);
+    void errorInvalidDeallocation(const Token *tok, const ValueFlow::Value *val);
     void errorReturnAddressOfFunctionParameter(const Token *tok, const std::string &varname);
     void errorUselessAssignmentArg(const Token *tok);
     void errorUselessAssignmentPtrArg(const Token *tok);
 
-    void getErrorMessages(ErrorLogger *errorLogger, const Settings *settings) const {
+    void getErrorMessages(ErrorLogger *errorLogger, const Settings *settings) const OVERRIDE {
+        ErrorPath errorPath;
         CheckAutoVariables c(nullptr,settings,errorLogger);
         c.errorAutoVariableAssignment(nullptr, false);
         c.errorReturnAddressToAutoVariable(nullptr);
         c.errorReturnPointerToLocalArray(nullptr);
-        c.errorReturnReference(nullptr);
-        c.errorReturnTempReference(nullptr);
-        c.errorInvalidDeallocation(nullptr);
+        c.errorReturnReference(nullptr, errorPath, false);
+        c.errorDanglingReference(nullptr, nullptr, errorPath);
+        c.errorReturnTempReference(nullptr, errorPath, false);
+        c.errorInvalidDeallocation(nullptr, nullptr);
         c.errorReturnAddressOfFunctionParameter(nullptr, "parameter");
         c.errorUselessAssignmentArg(nullptr);
         c.errorUselessAssignmentPtrArg(nullptr);
+        c.errorReturnDanglingLifetime(nullptr, nullptr);
+        c.errorInvalidLifetime(nullptr, nullptr);
+        c.errorDanglngLifetime(nullptr, nullptr);
+        c.errorDanglingTemporaryLifetime(nullptr, nullptr);
     }
 
     static std::string myName() {
         return "Auto Variables";
     }
 
-    std::string classInfo() const {
+    std::string classInfo() const OVERRIDE {
         return "A pointer to a variable is only valid as long as the variable is in scope.\n"
                "Check:\n"
                "- returning a pointer to auto or temporary variable\n"

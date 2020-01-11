@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2018 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,18 +22,26 @@
 #include <QXmlStreamWriter>
 
 const unsigned int CppcheckLibraryData::Function::Arg::ANY = ~0U;
+const unsigned int CppcheckLibraryData::Function::Arg::VARIADIC = ~1U;
 
 CppcheckLibraryData::CppcheckLibraryData()
 {
 }
 
+static std::string unhandledElement(const QXmlStreamReader &xmlReader)
+{
+    throw std::runtime_error(QObject::tr("line %1: Unhandled element %2").arg(xmlReader.lineNumber()).arg(xmlReader.name().toString()).toStdString());
+}
+
 static CppcheckLibraryData::Container loadContainer(QXmlStreamReader &xmlReader)
 {
     CppcheckLibraryData::Container container;
-    container.id           = xmlReader.attributes().value("id").toString();
-    container.inherits     = xmlReader.attributes().value("inherits").toString();
-    container.startPattern = xmlReader.attributes().value("startPattern").toString();
-    container.endPattern   = xmlReader.attributes().value("endPattern").toString();
+    container.id            = xmlReader.attributes().value("id").toString();
+    container.inherits      = xmlReader.attributes().value("inherits").toString();
+    container.startPattern  = xmlReader.attributes().value("startPattern").toString();
+    container.endPattern    = xmlReader.attributes().value("endPattern").toString();
+    container.opLessAllowed = xmlReader.attributes().value("opLessAllowed").toString();
+    container.itEndPattern  = xmlReader.attributes().value("itEndPattern").toString();
 
     QXmlStreamReader::TokenType type;
     while ((type = xmlReader.readNext()) != QXmlStreamReader::EndElement ||
@@ -67,7 +75,9 @@ static CppcheckLibraryData::Container loadContainer(QXmlStreamReader &xmlReader)
                     container.accessFunctions.append(function);
                 else
                     container.otherFunctions.append(function);
-            };
+            }
+        } else {
+            unhandledElement(xmlReader);
         }
     }
     return container;
@@ -81,14 +91,22 @@ static CppcheckLibraryData::Define loadDefine(const QXmlStreamReader &xmlReader)
     return define;
 }
 
+static QString loadUndefine(const QXmlStreamReader &xmlReader)
+{
+    return xmlReader.attributes().value("name").toString();
+}
+
 static CppcheckLibraryData::Function::Arg loadFunctionArg(QXmlStreamReader &xmlReader)
 {
     CppcheckLibraryData::Function::Arg arg;
     QString argnr = xmlReader.attributes().value("nr").toString();
     if (argnr == "any")
         arg.nr = CppcheckLibraryData::Function::Arg::ANY;
+    else if (argnr == "variadic")
+        arg.nr = CppcheckLibraryData::Function::Arg::VARIADIC;
     else
         arg.nr = argnr.toUInt();
+    arg.defaultValue = xmlReader.attributes().value("default").toString();
 
     QXmlStreamReader::TokenType type;
     while ((type = xmlReader.readNext()) != QXmlStreamReader::EndElement ||
@@ -114,12 +132,17 @@ static CppcheckLibraryData::Function::Arg loadFunctionArg(QXmlStreamReader &xmlR
             minsize.arg  = xmlReader.attributes().value("arg").toString();
             minsize.arg2 = xmlReader.attributes().value("arg2").toString();
             arg.minsizes.append(minsize);
+        } else if (elementName == "iterator") {
+            arg.iterator.container = xmlReader.attributes().value("container").toInt();
+            arg.iterator.type = xmlReader.attributes().value("type").toString();
+        } else {
+            unhandledElement(xmlReader);
         }
     }
     return arg;
 }
 
-static CppcheckLibraryData::Function loadFunction(QXmlStreamReader &xmlReader, const QString comments)
+static CppcheckLibraryData::Function loadFunction(QXmlStreamReader &xmlReader, const QString &comments)
 {
     CppcheckLibraryData::Function function;
     function.comments = comments;
@@ -140,16 +163,24 @@ static CppcheckLibraryData::Function loadFunction(QXmlStreamReader &xmlReader, c
             function.leakignore = true;
         else if (elementName == "use-retval")
             function.useretval = true;
-        else if (elementName == "formatstr") {
+        else if (elementName == "returnValue") {
+            const QString container = xmlReader.attributes().value("container").toString();
+            function.returnValue.container = container.isNull() ? -1 : container.toInt();
+            function.returnValue.type = xmlReader.attributes().value("type").toString();
+            function.returnValue.value = xmlReader.readElementText();
+        } else if (elementName == "formatstr") {
             function.formatstr.scan   = xmlReader.attributes().value("scan").toString();
             function.formatstr.secure = xmlReader.attributes().value("secure").toString();
         } else if (elementName == "arg")
             function.args.append(loadFunctionArg(xmlReader));
         else if (elementName == "warn") {
             function.warn.severity     = xmlReader.attributes().value("severity").toString();
+            function.warn.cstd         = xmlReader.attributes().value("cstd").toString();
             function.warn.reason       = xmlReader.attributes().value("reason").toString();
             function.warn.alternatives = xmlReader.attributes().value("alternatives").toString();
             function.warn.msg          = xmlReader.readElementText();
+        } else {
+            unhandledElement(xmlReader);
         }
     }
     return function;
@@ -174,6 +205,8 @@ static CppcheckLibraryData::MemoryResource loadMemoryResource(QXmlStreamReader &
             memoryresource.dealloc.append(xmlReader.readElementText());
         else if (elementName == "use")
             memoryresource.use.append(xmlReader.readElementText());
+        else
+            unhandledElement(xmlReader);
     }
     return memoryresource;
 }
@@ -187,7 +220,7 @@ static CppcheckLibraryData::PodType loadPodType(const QXmlStreamReader &xmlReade
     return podtype;
 }
 
-bool CppcheckLibraryData::open(QIODevice &file)
+QString CppcheckLibraryData::open(QIODevice &file)
 {
     clear();
     QString comments;
@@ -201,16 +234,27 @@ bool CppcheckLibraryData::open(QIODevice &file)
             comments += xmlReader.text().toString();
             break;
         case QXmlStreamReader::StartElement:
-            if (xmlReader.name() == "container")
-                containers.append(loadContainer(xmlReader));
-            if (xmlReader.name() == "define")
-                defines.append(loadDefine(xmlReader));
-            else if (xmlReader.name() == "function")
-                functions.append(loadFunction(xmlReader, comments));
-            else if (xmlReader.name() == "memory" || xmlReader.name() == "resource")
-                memoryresource.append(loadMemoryResource(xmlReader));
-            else if (xmlReader.name() == "podtype")
-                podtypes.append(loadPodType(xmlReader));
+            try {
+                const QString elementName(xmlReader.name().toString());
+                if (elementName == "def")
+                    ;
+                else if (elementName == "container")
+                    containers.append(loadContainer(xmlReader));
+                else if (elementName == "define")
+                    defines.append(loadDefine(xmlReader));
+                else if (elementName == "undefine")
+                    undefines.append(loadUndefine(xmlReader));
+                else if (elementName == "function")
+                    functions.append(loadFunction(xmlReader, comments));
+                else if (elementName == "memory" || elementName == "resource")
+                    memoryresource.append(loadMemoryResource(xmlReader));
+                else if (elementName == "podtype")
+                    podtypes.append(loadPodType(xmlReader));
+                else
+                    unhandledElement(xmlReader);
+            } catch (std::runtime_error &e) {
+                return e.what();
+            }
             comments.clear();
             break;
         default:
@@ -218,15 +262,15 @@ bool CppcheckLibraryData::open(QIODevice &file)
         }
     }
 
-    return true;
+    return QString();
 }
 
-static void writeContainerFunctions(QXmlStreamWriter &xmlWriter, const QString name, int extra, const QList<struct CppcheckLibraryData::Container::Function> &functions)
+static void writeContainerFunctions(QXmlStreamWriter &xmlWriter, const QString &name, int extra, const QList<struct CppcheckLibraryData::Container::Function> &functions)
 {
-    if (functions.isEmpty() && extra <= 0)
+    if (functions.isEmpty() && extra < 0)
         return;
     xmlWriter.writeStartElement(name);
-    if (extra > 0) {
+    if (extra >= 0) {
         if (name == "access")
             xmlWriter.writeAttribute("indexOperator", "array-like");
         else if (name == "size")
@@ -254,6 +298,11 @@ static void writeContainer(QXmlStreamWriter &xmlWriter, const CppcheckLibraryDat
         xmlWriter.writeAttribute("endPattern", container.endPattern);
     if (!container.inherits.isEmpty())
         xmlWriter.writeAttribute("inherits", container.inherits);
+    if (!container.opLessAllowed.isEmpty())
+        xmlWriter.writeAttribute("opLessAllowed", container.opLessAllowed);
+    if (!container.itEndPattern.isEmpty())
+        xmlWriter.writeAttribute("itEndPattern", container.itEndPattern);
+
     if (!container.type.templateParameter.isEmpty() || !container.type.string.isEmpty()) {
         xmlWriter.writeStartElement("type");
         if (!container.type.templateParameter.isEmpty())
@@ -263,8 +312,8 @@ static void writeContainer(QXmlStreamWriter &xmlWriter, const CppcheckLibraryDat
         xmlWriter.writeEndElement();
     }
     writeContainerFunctions(xmlWriter, "size", container.size_templateParameter, container.sizeFunctions);
-    writeContainerFunctions(xmlWriter, "access", container.access_arrayLike, container.accessFunctions);
-    writeContainerFunctions(xmlWriter, "other", 0, container.otherFunctions);
+    writeContainerFunctions(xmlWriter, "access", container.access_arrayLike?1:-1, container.accessFunctions);
+    writeContainerFunctions(xmlWriter, "other", -1, container.otherFunctions);
     xmlWriter.writeEndElement();
 }
 
@@ -289,6 +338,16 @@ static void writeFunction(QXmlStreamWriter &xmlWriter, const CppcheckLibraryData
         xmlWriter.writeEmptyElement("const");
     if (function.gccPure)
         xmlWriter.writeEmptyElement("pure");
+    if (!function.returnValue.empty()) {
+        xmlWriter.writeStartElement("returnValue");
+        if (!function.returnValue.type.isNull())
+            xmlWriter.writeAttribute("type", function.returnValue.type);
+        if (function.returnValue.container >= 0)
+            xmlWriter.writeAttribute("container", QString::number(function.returnValue.container));
+        if (!function.returnValue.value.isNull())
+            xmlWriter.writeCharacters(function.returnValue.value);
+        xmlWriter.writeEndElement();
+    }
     if (function.noreturn != CppcheckLibraryData::Function::Unknown)
         xmlWriter.writeTextElement("noreturn", (function.noreturn == CppcheckLibraryData::Function::True) ? "true" : "false");
     if (function.leakignore)
@@ -307,8 +366,12 @@ static void writeFunction(QXmlStreamWriter &xmlWriter, const CppcheckLibraryData
         xmlWriter.writeStartElement("arg");
         if (arg.nr == CppcheckLibraryData::Function::Arg::ANY)
             xmlWriter.writeAttribute("nr", "any");
+        else if (arg.nr == CppcheckLibraryData::Function::Arg::VARIADIC)
+            xmlWriter.writeAttribute("nr", "variadic");
         else
             xmlWriter.writeAttribute("nr", QString::number(arg.nr));
+        if (!arg.defaultValue.isNull())
+            xmlWriter.writeAttribute("default", arg.defaultValue);
         if (arg.formatstr)
             xmlWriter.writeEmptyElement("formatstr");
         if (arg.notnull)
@@ -332,6 +395,15 @@ static void writeFunction(QXmlStreamWriter &xmlWriter, const CppcheckLibraryData
             xmlWriter.writeEndElement();
         }
 
+        if (arg.iterator.container >= 0 || !arg.iterator.type.isNull()) {
+            xmlWriter.writeStartElement("iterator");
+            if (arg.iterator.container >= 0)
+                xmlWriter.writeAttribute("container", QString::number(arg.iterator.container));
+            if (!arg.iterator.type.isNull())
+                xmlWriter.writeAttribute("type", arg.iterator.type);
+            xmlWriter.writeEndElement();
+        }
+
         xmlWriter.writeEndElement();
     }
 
@@ -341,11 +413,14 @@ static void writeFunction(QXmlStreamWriter &xmlWriter, const CppcheckLibraryData
         if (!function.warn.severity.isEmpty())
             xmlWriter.writeAttribute("severity", function.warn.severity);
 
-        if (!function.warn.reason.isEmpty())
-            xmlWriter.writeAttribute("reason", function.warn.reason);
+        if (!function.warn.cstd.isEmpty())
+            xmlWriter.writeAttribute("cstd", function.warn.cstd);
 
         if (!function.warn.alternatives.isEmpty())
             xmlWriter.writeAttribute("alternatives", function.warn.alternatives);
+
+        if (!function.warn.reason.isEmpty())
+            xmlWriter.writeAttribute("reason", function.warn.reason);
 
         if (!function.warn.msg.isEmpty())
             xmlWriter.writeCharacters(function.warn.msg);
@@ -388,6 +463,12 @@ QString CppcheckLibraryData::toString() const
         xmlWriter.writeStartElement("define");
         xmlWriter.writeAttribute("name", define.name);
         xmlWriter.writeAttribute("value", define.value);
+        xmlWriter.writeEndElement();
+    }
+
+    foreach (const QString &undef, undefines) {
+        xmlWriter.writeStartElement("undefine");
+        xmlWriter.writeAttribute("name", undef);
         xmlWriter.writeEndElement();
     }
 

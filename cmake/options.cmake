@@ -23,7 +23,7 @@ option(ANALYZE_DATAFLOW     "Clang dynamic analyzer: general dynamic dataflow an
 option(WARNINGS_ARE_ERRORS  "Treat warnings as errors"                                      OFF)
 option(WARNINGS_ANSI_ISO    "Issue all the mandatory diagnostics Listed in C standard"      ON)
 
-set(USE_MATCHCOMPILER "Auto" CACHE STRING "Usage of match compliler")
+set(USE_MATCHCOMPILER "Auto" CACHE STRING "Usage of match compiler")
 set_property(CACHE USE_MATCHCOMPILER PROPERTY STRINGS Auto Off On Verify) 
 if (USE_MATCHCOMPILER STREQUAL "Auto")
     if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -37,6 +37,7 @@ endif()
 
 option(BUILD_TESTS          "Build tests"                                                   OFF)
 option(BUILD_GUI            "Build the qt application"                                      OFF)
+option(WITH_QCHART          "When building GUI(need BUILD_GUI=ON), use Qt5 Charts"          OFF)
 
 option(HAVE_RULES           "Usage of rules (needs PCRE library and headers)"               OFF)
 
@@ -46,3 +47,6 @@ set(CMAKE_LIB_DIRS_CONFIGCMAKE     ${CMAKE_INSTALL_PREFIX}/lib          CACHE PA
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
+
+set(FILESDIR                       ${CMAKE_INSTALL_PREFIX}/share/${PROJECT_NAME} CACHE STRING "Cppcheck files directory")
+

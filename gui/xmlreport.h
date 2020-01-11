@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,7 +40,7 @@ public:
     /**
      * @brief Read contents of the report file.
      */
-    virtual QList<ErrorItem> Read() = 0;
+    virtual QList<ErrorItem> read() = 0;
 
     /**
      * @brief Quote the message.

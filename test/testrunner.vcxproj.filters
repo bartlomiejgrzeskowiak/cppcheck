@@ -124,9 +124,6 @@
     <ClCompile Include="testunusedvar.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\cli\pathmatch.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\cli\filelister.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -202,6 +199,24 @@
     <ClCompile Include="testfunctions.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="testimportproject.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="testplatform.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="testastutils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\astutils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="testsimplifyusing.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="testexprengine.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="options.h">
@@ -214,9 +229,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="testutils.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\cli\pathmatch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\cli\filelister.h">

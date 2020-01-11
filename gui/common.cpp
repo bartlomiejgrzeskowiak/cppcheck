@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2018 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,18 +18,19 @@
 
 
 #include "common.h"
+#include <QCoreApplication>
 #include <QSettings>
 #include <QFileInfo>
 #include <QDir>
 
 
-QString GetPath(const QString &type)
+QString getPath(const QString &type)
 {
     QSettings settings;
-    QString path = settings.value(type, "").toString();
+    QString path = settings.value(type, QString()).toString();
     if (path.isEmpty()) {
         // if not set, fallback to last check path hoping that it will be close enough
-        path = settings.value(SETTINGS_LAST_CHECK_PATH, "").toString();
+        path = settings.value(SETTINGS_LAST_CHECK_PATH, QString()).toString();
         if (path.isEmpty())
             // if not set, return user's home directory as the best we can do for now
             return QDir::homePath();
@@ -37,8 +38,31 @@ QString GetPath(const QString &type)
     return path;
 }
 
-void SetPath(const QString &type, const QString &value)
+void setPath(const QString &type, const QString &value)
 {
     QSettings settings;
     settings.setValue(type, value);
+}
+
+QString toFilterString(const QMap<QString,QString>& filters, bool addAllSupported, bool addAll)
+{
+    QStringList entries;
+
+    if (addAllSupported) {
+        entries << QCoreApplication::translate("toFilterString", "All supported files (%1)")
+                .arg(QStringList(filters.values()).join(" "));
+    }
+
+    if (addAll) {
+        entries << QCoreApplication::translate("toFilterString", "All files (%1)").arg("*.*");
+    }
+
+    // We're using the description of the filters as the map keys, the file
+    // name patterns are our values. The generated filter string list will
+    // thus be sorted alphabetically over the descriptions.
+    for (auto k: filters.keys()) {
+        entries << QString("%1 (%2)").arg(k).arg(filters.value(k));
+    }
+
+    return entries.join(";;");
 }

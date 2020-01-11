@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -41,7 +41,7 @@ class FileViewDialog : public QDialog {
 public:
     FileViewDialog(const QString &file,
                    const QString &title,
-                   QWidget *parent = 0);
+                   QWidget *parent = nullptr);
 
 
 protected:
@@ -52,14 +52,7 @@ protected:
     * @param filename File to load.
     * @param edit Control where to load the file contents.
     */
-    void LoadTextFile(const QString &filename, QTextEdit *edit);
-
-    /**
-    * @brief Format dialog title from filename.
-    *
-    * @param filename File to load.
-    */
-    QString FormatTitle(const QString &filename);
+    void loadTextFile(const QString &filename, QTextEdit *edit);
 
     Ui::Fileview mUI;
 };

@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,13 +26,13 @@ ScratchPad::ScratchPad(MainWindow& mainWindow)
 {
     mUI.setupUi(this);
 
-    connect(mUI.mCheckButton, SIGNAL(clicked()), this, SLOT(CheckButtonClicked()));
+    connect(mUI.mCheckButton, &QPushButton::clicked, this, &ScratchPad::checkButtonClicked);
 }
 
-void ScratchPad::CheckButtonClicked()
+void ScratchPad::checkButtonClicked()
 {
     QString filename = mUI.lineEdit->text();
     if (filename.isEmpty())
         filename = "test.cpp";
-    mMainWindow.CheckCode(mUI.plainTextEdit->toPlainText(), filename);
+    mMainWindow.analyzeCode(mUI.plainTextEdit->toPlainText(), filename);
 }

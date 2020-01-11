@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,9 +16,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "tokenize.h"
+
 #include "checkassert.h"
+#include "settings.h"
 #include "testsuite.h"
+#include "tokenize.h"
 
 
 class TestAssert : public TestFixture {
@@ -38,11 +40,11 @@ private:
         tokenizer.tokenize(istr, filename);
 
         // Check..
-        CheckAssert checkAssert(&tokenizer, &settings, this);
-        checkAssert.runSimplifiedChecks(&tokenizer, &settings, this);
+        CheckAssert checkAssert;
+        checkAssert.runChecks(&tokenizer, &settings, this);
     }
 
-    void run() {
+    void run() OVERRIDE {
         settings.addEnabled("warning");
 
         TEST_CASE(assignmentInAssert);

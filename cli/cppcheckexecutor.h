@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,14 +20,16 @@
 #define CPPCHECKEXECUTOR_H
 
 #include "errorlogger.h"
+
 #include <cstdio>
 #include <ctime>
+#include <map>
 #include <set>
 #include <string>
 
 class CppCheck;
-class Settings;
 class Library;
+class Settings;
 
 /**
  * This class works as an example of how CppCheck can be used in external
@@ -46,7 +48,7 @@ public:
     /**
      * Destructor
      */
-    virtual ~CppCheckExecutor();
+    ~CppCheckExecutor() OVERRIDE;
 
     /**
      * Starts the checking.
@@ -67,17 +69,19 @@ public:
      *
      * @param outmsg Progress message e.g. "Checking main.cpp..."
      */
-    virtual void reportOut(const std::string &outmsg);
+    void reportOut(const std::string &outmsg) OVERRIDE;
 
     /** xml output of errors */
-    virtual void reportErr(const ErrorLogger::ErrorMessage &msg);
+    void reportErr(const ErrorLogger::ErrorMessage &msg) OVERRIDE;
 
-    void reportProgress(const std::string &filename, const char stage[], const std::size_t value);
+    void reportProgress(const std::string &filename, const char stage[], const std::size_t value) OVERRIDE;
 
     /**
      * Output information messages.
      */
-    virtual void reportInfo(const ErrorLogger::ErrorMessage &msg);
+    void reportInfo(const ErrorLogger::ErrorMessage &msg) OVERRIDE;
+
+    void reportVerification(const std::string &str) OVERRIDE;
 
     /**
      * Information about how many files have been checked
@@ -90,9 +94,9 @@ public:
     static void reportStatus(std::size_t fileindex, std::size_t filecount, std::size_t sizedone, std::size_t sizetotal);
 
     /**
-     * @param fp Output file
+     * @param exception_output Output file
      */
-    static void setExceptionOutput(FILE* fp);
+    static void setExceptionOutput(FILE* exceptionOutput);
     /**
     * @return file name to be used for output from exception handler. Has to be either "stdout" or "stderr".
     */
@@ -100,7 +104,7 @@ public:
 
     /**
     * Tries to load a library and prints warning/error messages
-    * @return false, if an error occured (except unknown XML elements)
+    * @return false, if an error occurred (except unknown XML elements)
     */
     static bool tryLoadLibrary(Library& destination, const char* basepath, const char* filename);
 
@@ -123,15 +127,21 @@ protected:
      */
     bool parseFromArgs(CppCheck *cppcheck, int argc, const char* const argv[]);
 
+    /**
+     * Helper function to supply settings. This can be used for testing.
+     * @param settings Reference to an Settings instance
+     */
+    void setSettings(const Settings &settings);
+
 private:
 
     /**
      * Wrapper around check_internal
      *   - installs optional platform dependent signal handling
      *
-     * * @param cppcheck cppcheck instance
-    * @param argc from main()
-    * @param argv from main()
+     * @param cppcheck cppcheck instance
+     * @param argc from main()
+     * @param argv from main()
      **/
     int check_wrapper(CppCheck& cppcheck, int argc, const char* const argv[]);
 
@@ -152,32 +162,42 @@ private:
     /**
      * Pointer to current settings; set while check() is running.
      */
-    const Settings* _settings;
+    const Settings* mSettings;
 
     /**
      * Used to filter out duplicate error messages.
      */
-    std::set<std::string> _errorList;
+    std::set<std::string> mShownErrors;
 
     /**
      * Filename associated with size of file
      */
-    std::map<std::string, std::size_t> _files;
+    std::map<std::string, std::size_t> mFiles;
 
     /**
      * Report progress time
      */
-    std::time_t time1;
+    std::time_t mLatestProgressOutputTime;
 
     /**
      * Output file name for exception handler
      */
-    static FILE* exceptionOutput;
+    static FILE* mExceptionOutput;
+
+    /**
+     * Error output
+     */
+    std::ofstream *mErrorOutput;
+
+    /**
+     * Verification report
+     */
+    std::ostream *mVerificationOutput;
 
     /**
      * Has --errorlist been given?
      */
-    bool errorlist;
+    bool mShowAllErrors;
 };
 
 #endif // CPPCHECKEXECUTOR_H

@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
       <Configuration>Debug</Configuration>
@@ -27,11 +27,12 @@
     <ClCompile Include="..\cli\cmdlineparser.cpp" />
     <ClCompile Include="..\cli\cppcheckexecutor.cpp" />
     <ClCompile Include="..\cli\filelister.cpp" />
-    <ClCompile Include="..\cli\pathmatch.cpp" />
     <ClCompile Include="..\cli\threadexecutor.cpp" />
+    <ClCompile Include="..\lib\astutils.cpp" />
     <ClCompile Include="options.cpp" />
     <ClCompile Include="test64bit.cpp" />
     <ClCompile Include="testassert.cpp" />
+    <ClCompile Include="testastutils.cpp" />
     <ClCompile Include="testautovariables.cpp" />
     <ClCompile Include="testbool.cpp" />
     <ClCompile Include="testboost.cpp" />
@@ -44,8 +45,10 @@
     <ClCompile Include="testcppcheck.cpp" />
     <ClCompile Include="testerrorlogger.cpp" />
     <ClCompile Include="testexceptionsafety.cpp" />
+    <ClCompile Include="testexprengine.cpp" />
     <ClCompile Include="testfilelister.cpp" />
     <ClCompile Include="testgarbage.cpp" />
+    <ClCompile Include="testimportproject.cpp" />
     <ClCompile Include="testincompletestatement.cpp" />
     <ClCompile Include="testinternal.cpp" />
     <ClCompile Include="testio.cpp" />
@@ -59,6 +62,7 @@
     <ClCompile Include="testother.cpp" />
     <ClCompile Include="testpath.cpp" />
     <ClCompile Include="testpathmatch.cpp" />
+    <ClCompile Include="testplatform.cpp" />
     <ClCompile Include="testpostfixoperator.cpp" />
     <ClCompile Include="testpreprocessor.cpp" />
     <ClCompile Include="testrunner.cpp" />
@@ -66,6 +70,7 @@
     <ClCompile Include="testsimplifytemplate.cpp" />
     <ClCompile Include="testsimplifytokens.cpp" />
     <ClCompile Include="testsimplifytypedef.cpp" />
+    <ClCompile Include="testsimplifyusing.cpp" />
     <ClCompile Include="testsizeof.cpp" />
     <ClCompile Include="teststl.cpp" />
     <ClCompile Include="teststring.cpp" />
@@ -94,7 +99,6 @@
   <ItemGroup>
     <ClInclude Include="..\cli\cmdlineparser.h" />
     <ClInclude Include="..\cli\filelister.h" />
-    <ClInclude Include="..\cli\pathmatch.h" />
     <ClInclude Include="..\cli\threadexecutor.h" />
     <ClInclude Include="..\lib\config.h" />
     <ClInclude Include="options.h" />
@@ -105,31 +109,32 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{4F7DCE5E-6CDE-38C4-9EA7-27AF3B25CEB4}</ProjectGuid>
     <RootNamespace>testrunner</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
     <WholeProgramOptimization>false</WholeProgramOptimization>
-    <PlatformToolset>v140_xp</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
     <WholeProgramOptimization>false</WholeProgramOptimization>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
     <WholeProgramOptimization>false</WholeProgramOptimization>
-    <PlatformToolset>v140_xp</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>Unicode</CharacterSet>
     <WholeProgramOptimization>false</WholeProgramOptimization>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings" />
@@ -182,6 +187,7 @@
       <PrecompiledHeaderFile>testsuite.h</PrecompiledHeaderFile>
       <ForcedIncludeFiles>testsuite.h</ForcedIncludeFiles>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -190,6 +196,8 @@
       <SubSystem>Console</SubSystem>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <LargeAddressAware>true</LargeAddressAware>
+      <StackReserveSize>8000000</StackReserveSize>
+      <StackCommitSize>8000000</StackCommitSize>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -208,6 +216,7 @@
       <PrecompiledHeaderFile>testsuite.h</PrecompiledHeaderFile>
       <ForcedIncludeFiles>testsuite.h</ForcedIncludeFiles>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -215,6 +224,8 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Console</SubSystem>
       <SuppressStartupBanner>true</SuppressStartupBanner>
+      <StackReserveSize>8000000</StackReserveSize>
+      <StackCommitSize>8000000</StackCommitSize>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -241,6 +252,7 @@
       <ForcedIncludeFiles>testsuite.h</ForcedIncludeFiles>
       <AdditionalOptions>/Zc:inline /Zc:throwingNew %(AdditionalOptions)</AdditionalOptions>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -252,6 +264,8 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <SetChecksum>true</SetChecksum>
       <LargeAddressAware>true</LargeAddressAware>
+      <StackReserveSize>8000000</StackReserveSize>
+      <StackCommitSize>8000000</StackCommitSize>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -278,18 +292,21 @@
       <ForcedIncludeFiles>testsuite.h</ForcedIncludeFiles>
       <AdditionalOptions>/Zc:inline /Zc:throwingNew %(AdditionalOptions)</AdditionalOptions>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalDependencies>shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>../externals;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <DataExecutionPrevention>true</DataExecutionPrevention>
-      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
       <IgnoreImportLibrary>true</IgnoreImportLibrary>
       <SubSystem>Console</SubSystem>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <SetChecksum>true</SetChecksum>
+      <StackReserveSize>8000000</StackReserveSize>
+      <StackCommitSize>8000000</StackCommitSize>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

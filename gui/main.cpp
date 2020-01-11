@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2018 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -41,6 +41,12 @@ static bool CheckArgs(const QStringList &args);
 
 int main(int argc, char *argv[])
 {
+
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 6, 0))
+    QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+    QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+#endif
+
     QApplication app(argc, argv);
 
 #if QT_VERSION < 0x050000
@@ -65,12 +71,12 @@ int main(int argc, char *argv[])
     }
 
     TranslationHandler* th = new TranslationHandler(&app);
-    th->SetLanguage(settings->value(SETTINGS_LANGUAGE, th->SuggestLanguage()).toString());
+    th->setLanguage(settings->value(SETTINGS_LANGUAGE, th->suggestLanguage()).toString());
 
     if (!CheckArgs(app.arguments()))
         return 0;
 
-    app.setWindowIcon(QIcon(":icon.png"));
+    app.setWindowIcon(QIcon(":cppcheck-gui.png"));
 
     // Register this metatype that is used to transfer error info
     qRegisterMetaType<ErrorItem>("ErrorItem");
@@ -107,7 +113,9 @@ static void ShowUsage()
                               "    -l <file>               Open given results xml file\n"
                               "    -d <directory>          Specify the directory that was checked to generate the results xml specified with -l\n"
                               "    -v, --version           Show program version\n"
-                              "    --data-dir=<directory>  Specify directory where GUI datafiles are located (translations, cfg)");
+                              "    --data-dir=<directory>  This option is for installation scripts so they can configure the directory where\n"
+                              "                            datafiles are located (translations, cfg). The GUI is not started when this option\n"
+                              "                            is used.");
 #if defined(_WIN32)
     QMessageBox msgBox(QMessageBox::Information,
                        MainWindow::tr("Cppcheck GUI - Command line parameters"),

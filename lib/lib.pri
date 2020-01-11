@@ -3,7 +3,7 @@
 include($$PWD/pcrerules.pri)
 include($$PWD/../externals/externals.pri)
 INCLUDEPATH += $$PWD
-HEADERS += $${PWD}/check.h \
+HEADERS += $${PWD}/analyzerinfo.h \
            $${PWD}/astutils.h \
            $${PWD}/check.h \
            $${PWD}/check64bit.h \
@@ -31,14 +31,20 @@ HEADERS += $${PWD}/check.h \
            $${PWD}/checkunusedfunctions.h \
            $${PWD}/checkunusedvar.h \
            $${PWD}/checkvaarg.h \
+           $${PWD}/clangimport.h \
            $${PWD}/cppcheck.h \
+           $${PWD}/ctu.h \
            $${PWD}/errorlogger.h \
+           $${PWD}/exprengine.h \
            $${PWD}/importproject.h \
            $${PWD}/library.h \
            $${PWD}/mathlib.h \
            $${PWD}/path.h \
+           $${PWD}/pathanalysis.h \
+           $${PWD}/pathmatch.h \
            $${PWD}/platform.h \
            $${PWD}/preprocessor.h \
+           $${PWD}/programmemory.h \
            $${PWD}/settings.h \
            $${PWD}/suppressions.h \
            $${PWD}/symboldatabase.h \
@@ -47,10 +53,10 @@ HEADERS += $${PWD}/check.h \
            $${PWD}/token.h \
            $${PWD}/tokenize.h \
            $${PWD}/tokenlist.h \
-           $${PWD}/valueflow.h \
+           $${PWD}/valueflow.h
 
-
-SOURCES += $${PWD}/astutils.cpp \
+SOURCES += $${PWD}/analyzerinfo.cpp \
+           $${PWD}/astutils.cpp \
            $${PWD}/check.cpp \
            $${PWD}/check64bit.cpp \
            $${PWD}/checkassert.cpp \
@@ -77,14 +83,20 @@ SOURCES += $${PWD}/astutils.cpp \
            $${PWD}/checkunusedfunctions.cpp \
            $${PWD}/checkunusedvar.cpp \
            $${PWD}/checkvaarg.cpp \
+           $${PWD}/clangimport.cpp \
            $${PWD}/cppcheck.cpp \
+           $${PWD}/ctu.cpp \
            $${PWD}/errorlogger.cpp \
+           $${PWD}/exprengine.cpp \
            $${PWD}/importproject.cpp \
            $${PWD}/library.cpp \
            $${PWD}/mathlib.cpp \
            $${PWD}/path.cpp \
+           $${PWD}/pathanalysis.cpp \
+           $${PWD}/pathmatch.cpp \
            $${PWD}/platform.cpp \
            $${PWD}/preprocessor.cpp \
+           $${PWD}/programmemory.cpp \
            $${PWD}/settings.cpp \
            $${PWD}/suppressions.cpp \
            $${PWD}/symboldatabase.cpp \

@@ -1,7 +1,7 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 #
 # Cppcheck - A tool for static C/C++ code analysis
-# Copyright (C) 2007-2016 Cppcheck team.
+# Copyright (C) 2007-2019 Cppcheck team.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -72,7 +72,7 @@ class Extract:
                 continue
 
             # check
-            res = re.match('\s+check.*\(' + string, line)
+            res = re.match('\\s+check.*\\(' + string, line)
             if res is not None:
                 code = res.group(1)
 
@@ -163,9 +163,9 @@ def writeHtmlFile(nodes, functionName, filename, errorsOnly):
 
 
 if len(sys.argv) <= 1 or '--help' in sys.argv:
-    print ('Extract test cases from test file')
-    print (
-        'Syntax: extracttests.py [--html=folder] [--xml] [--code=folder] path/testfile.cpp')
+    print('Extract test cases from test file')
+    print(
+        'Syntax: extracttests.py [--html=folder] [--xml] [--code=folder] [--onlyTP] path/testfile.cpp')
     sys.exit(0)
 
 # parse command line
@@ -173,9 +173,12 @@ xml = False
 filename = None
 htmldir = None
 codedir = None
+onlyTP = None
 for arg in sys.argv[1:]:
     if arg == '--xml':
         xml = True
+    elif arg == '--onlyTP':
+        onlyTP = True
     elif arg.startswith('--html='):
         htmldir = arg[7:]
     elif arg.startswith('--code='):
@@ -183,7 +186,7 @@ for arg in sys.argv[1:]:
     elif arg.endswith('.cpp'):
         filename = arg
     else:
-        print ('Invalid option: ' + arg)
+        print('Invalid option: ' + arg)
         sys.exit(1)
 
 
@@ -195,8 +198,8 @@ if filename is not None:
 
     # generate output
     if xml:
-        print ('<?xml version="1.0"?>')
-        print ('<tree>')
+        print('<?xml version="1.0"?>')
+        print('<tree>')
         count = 0
         for node in e.nodes:
             s = '  <node'
@@ -204,8 +207,8 @@ if filename is not None:
             s += ' code="' + strtoxml(node['code']) + '"'
             s += ' expected="' + strtoxml(node['expected']) + '"'
             s += '/>'
-            print (s)
-        print ('</tree>')
+            print(s)
+        print('</tree>')
     elif htmldir is not None:
         if not htmldir.endswith('/'):
             htmldir += '/'
@@ -284,6 +287,9 @@ if filename is not None:
         errors = open(codedir + 'errors.txt', 'w')
 
         for node in e.nodes:
+            if onlyTP and node['expected'] == '':
+                continue
+
             testnum = testnum + 1
 
             functionName = node['functionName']
@@ -311,4 +317,4 @@ if filename is not None:
         errors.close()
     else:
         for node in e.nodes:
-            print (node['functionName'])
+            print(node['functionName'])

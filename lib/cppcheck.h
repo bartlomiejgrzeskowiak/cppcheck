@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,14 +21,18 @@
 #define cppcheckH
 //---------------------------------------------------------------------------
 
-#include "config.h"
-#include "settings.h"
-#include "errorlogger.h"
+#include "analyzerinfo.h"
 #include "check.h"
+#include "config.h"
+#include "errorlogger.h"
+#include "importproject.h"
+#include "settings.h"
 
-#include <string>
-#include <list>
+#include <cstddef>
 #include <istream>
+#include <list>
+#include <map>
+#include <string>
 
 class Tokenizer;
 
@@ -51,7 +55,7 @@ public:
     /**
      * @brief Destructor.
      */
-    virtual ~CppCheck();
+    ~CppCheck() OVERRIDE;
 
     /**
      * @brief This starts the actual checking. Note that you must call
@@ -109,7 +113,7 @@ public:
      * @brief Terminate checking. The checking will be terminated as soon as possible.
      */
     void terminate() {
-        _settings.terminate();
+        Settings::terminate();
     }
 
     /**
@@ -122,47 +126,51 @@ public:
     void purgedConfigurationMessage(const std::string &file, const std::string& configuration);
 
     void dontSimplify() {
-        _simplify = false;
+        mSimplify = false;
     }
 
-    /** analyse whole program, run this after all TUs has been scanned. */
-    void analyseWholeProgram();
+    /** Analyse whole program, run this after all TUs has been scanned.
+     * This is deprecated and the plan is to remove this when
+     * .analyzeinfo is good enough.
+     * Return true if an error is reported.
+     */
+    bool analyseWholeProgram();
+
+    /** analyse whole program use .analyzeinfo files */
+    void analyseWholeProgram(const std::string &buildDir, const std::map<std::string, std::size_t> &files);
 
     /** Check if the user wants to check for unused functions
      * and if it's possible at all */
-    bool unusedFunctionCheckIsEnabled() const;
+    bool isUnusedFunctionCheckEnabled() const;
 
 private:
+
+    /** Are there "simple" rules */
+    bool hasRule(const std::string &tokenlist) const;
 
     /** @brief There has been an internal error => Report information message */
     void internalError(const std::string &filename, const std::string &msg);
 
     /**
-     * @brief Process one file.
+     * @brief Check a file using stream
      * @param filename file name
      * @param cfgname  cfg name
      * @param fileStream stream the file content can be read from
-     * @return amount of errors found
+     * @return number of errors found
      */
-    unsigned int processFile(const std::string& filename, const std::string &cfgname, std::istream& fileStream);
+    unsigned int checkFile(const std::string& filename, const std::string &cfgname, std::istream& fileStream);
 
     /**
      * @brief Check raw tokens
-     * @param tokenizer
+     * @param tokenizer tokenizer instance
      */
     void checkRawTokens(const Tokenizer &tokenizer);
 
     /**
      * @brief Check normal tokens
-     * @param tokenizer
+     * @param tokenizer tokenizer instance
      */
     void checkNormalTokens(const Tokenizer &tokenizer);
-
-    /**
-     * @brief Check simplified tokens
-     * @param tokenizer
-     */
-    void checkSimplifiedTokens(const Tokenizer &tokenizer);
 
     /**
      * @brief Execute rules, if any
@@ -178,42 +186,48 @@ private:
      * "[filepath:line number] Message", e.g.
      * "[main.cpp:4] Uninitialized member variable"
      */
-    virtual void reportErr(const ErrorLogger::ErrorMessage &msg);
+    void reportErr(const ErrorLogger::ErrorMessage &msg) OVERRIDE;
 
     /**
      * @brief Information about progress is directed here.
      *
      * @param outmsg Message to show, e.g. "Checking main.cpp..."
      */
-    virtual void reportOut(const std::string &outmsg);
+    void reportOut(const std::string &outmsg) OVERRIDE;
 
-    std::list<std::string> _errorList;
-    Settings _settings;
+    void reportVerification(const std::string &str) OVERRIDE;
 
-    void reportProgress(const std::string &filename, const char stage[], const std::size_t value);
+    std::list<std::string> mErrorList;
+    Settings mSettings;
+
+    void reportProgress(const std::string &filename, const char stage[], const std::size_t value) OVERRIDE;
 
     /**
      * Output information messages.
      */
-    virtual void reportInfo(const ErrorLogger::ErrorMessage &msg);
+    void reportInfo(const ErrorLogger::ErrorMessage &msg) OVERRIDE;
 
-    ErrorLogger &_errorLogger;
+    ErrorLogger &mErrorLogger;
 
     /** @brief Current preprocessor configuration */
-    std::string cfg;
+    std::string mCurrentConfig;
 
-    unsigned int exitcode;
+    unsigned int mExitCode;
 
-    bool _useGlobalSuppressions;
+    bool mSuppressInternalErrorFound;
+
+    bool mUseGlobalSuppressions;
 
     /** Are there too many configs? */
-    bool tooManyConfigs;
+    bool mTooManyConfigs;
 
     /** Simplify code? true by default */
-    bool _simplify;
+    bool mSimplify;
 
     /** File info used for whole program analysis */
-    std::list<Check::FileInfo*> fileInfo;
+    std::list<Check::FileInfo*> mFileInfo;
+
+    AnalyzerInformation mAnalyzerInformation;
 };
 
 /// @}

@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,10 +16,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "tokenize.h"
 #include "checksizeof.h"
+#include "settings.h"
 #include "testsuite.h"
+#include "tokenize.h"
 
+#include <simplecpp.h>
+#include <map>
+#include <vector>
 
 class TestSizeof : public TestFixture {
 public:
@@ -29,13 +33,14 @@ public:
 private:
     Settings settings;
 
-    void run() {
+    void run() OVERRIDE {
         settings.addEnabled("warning");
         settings.addEnabled("portability");
         settings.inconclusive = true;
 
         TEST_CASE(sizeofsizeof);
         TEST_CASE(sizeofCalculation);
+        TEST_CASE(sizeofFunction);
         TEST_CASE(checkPointerSizeof);
         TEST_CASE(checkPointerSizeofStruct);
         TEST_CASE(sizeofDivisionMemset);
@@ -54,6 +59,30 @@ private:
         Tokenizer tokenizer(&settings, this);
         std::istringstream istr(code);
         tokenizer.tokenize(istr, "test.cpp");
+
+        // Check...
+        CheckSizeof checkSizeof(&tokenizer, &settings, this);
+        checkSizeof.runChecks(&tokenizer, &settings, this);
+    }
+
+    void checkP(const char code[]) {
+        // Clear the error buffer..
+        errout.str("");
+
+        // Raw tokens..
+        std::vector<std::string> files(1, "test.cpp");
+        std::istringstream istr(code);
+        const simplecpp::TokenList tokens1(istr, files, files[0]);
+
+        // Preprocess..
+        simplecpp::TokenList tokens2(files);
+        std::map<std::string, simplecpp::TokenList*> filedata;
+        simplecpp::preprocess(tokens2, tokens1, files, filedata, simplecpp::DUI());
+
+        // Tokenize..
+        Tokenizer tokenizer(&settings, this);
+        tokenizer.createTokens(&tokens2);
+        tokenizer.simplifyTokens1("");
 
         // Check...
         CheckSizeof checkSizeof(&tokenizer, &settings, this);
@@ -109,23 +138,93 @@ private:
         ASSERT_EQUALS("[test.cpp:1]: (warning) Found calculation inside sizeof().\n", errout.str());
 
         // #6888
-        check("int f(int i) {\n"
-              "  $($void$)$sizeof$($i $!= $2$);\n" // '$' sets Token::isExpandedMacro() to true
-              "  $($void$)$($($($($sizeof$($i $!= $2$)$)$)$)$);\n"
-              "  $static_cast<void>$($sizeof($i $!= $2$)$);\n"
-              "  $static_cast<void>$($($($($($sizeof$($i $!= $2$)$)$)$)$)$);\n"
-              "  return i + foo(1);\n"
-              "}");
+        checkP("#define SIZEOF1   sizeof(i != 2)\n"
+               "#define SIZEOF2   ((sizeof(i != 2)))\n"
+               "#define VOIDCAST1 (void)\n"
+               "#define VOIDCAST2(SZ) static_cast<void>(SZ)\n"
+               "int f(int i) {\n"
+               "  VOIDCAST1 SIZEOF1;\n"
+               "  VOIDCAST1 SIZEOF2;\n"
+               "  VOIDCAST2(SIZEOF1);\n"
+               "  VOIDCAST2(SIZEOF2);\n"
+               "  return i + foo(1);\n"
+               "}");
         ASSERT_EQUALS("", errout.str());
 
-        check("int f(int i) {\n"
-              "  $sizeof$($i $!= $2$);\n"
-              "  $($($sizeof($i $!= 2$)$)$);\n"
-              "  return i + foo(1);\n"
-              "}");
-        ASSERT_EQUALS("[test.cpp:2]: (warning, inconclusive) Found calculation inside sizeof().\n"
-                      "[test.cpp:3]: (warning, inconclusive) Found calculation inside sizeof().\n", errout.str());
+        checkP("#define SIZEOF1   sizeof(i != 2)\n"
+               "#define SIZEOF2   ((sizeof(i != 2)))\n"
+               "int f(int i) {\n"
+               "  SIZEOF1;\n"
+               "  SIZEOF2;\n"
+               "  return i + foo(1);\n"
+               "}");
+        ASSERT_EQUALS("[test.cpp:4]: (warning, inconclusive) Found calculation inside sizeof().\n"
+                      "[test.cpp:5]: (warning, inconclusive) Found calculation inside sizeof().\n", errout.str());
 
+        checkP("#define MACRO(data)  f(data, sizeof(data))\n"
+               "x = MACRO((unsigned int *)data + 4);");
+        ASSERT_EQUALS("[test.cpp:2]: (warning, inconclusive) Found calculation inside sizeof().\n", errout.str());
+    }
+
+    void sizeofFunction() {
+        check("class Foo\n"
+              "{\n"
+              "    int bar() { return 1; };\n"
+              "}\n"
+              "Foo f;int a=sizeof(f.bar());");
+        ASSERT_EQUALS("[test.cpp:5]: (warning) Found function call inside sizeof().\n", errout.str());
+
+        check("class Foo\n"
+              "{\n"
+              "    int bar() { return 1; };\n"
+              "    int bar() const { return 1; };\n"
+              "}\n"
+              "Foo f;int a=sizeof(f.bar());");
+        ASSERT_EQUALS("", errout.str());
+
+        check("class Foo\n"
+              "{\n"
+              "    int bar() { return 1; };\n"
+              "}\n"
+              "Foo * fp;int a=sizeof(fp->bar());");
+        ASSERT_EQUALS("[test.cpp:5]: (warning) Found function call inside sizeof().\n", errout.str());
+
+        check("int a=sizeof(foo());");
+        ASSERT_EQUALS("", errout.str());
+
+        check("int foo() { return 1; }; int a=sizeof(foo());");
+        ASSERT_EQUALS("[test.cpp:1]: (warning) Found function call inside sizeof().\n", errout.str());
+
+        check("int foo() { return 1; }; sizeof(decltype(foo()));");
+        ASSERT_EQUALS("", errout.str());
+
+        check("int foo(int) { return 1; }; int a=sizeof(foo(0))");
+        ASSERT_EQUALS("[test.cpp:1]: (warning) Found function call inside sizeof().\n", errout.str());
+
+        check("char * buf; int a=sizeof(*buf);");
+        ASSERT_EQUALS("", errout.str());
+
+        check("int a=sizeof(foo())");
+        ASSERT_EQUALS("", errout.str());
+
+        check("int foo(int) { return 1; }; char buf[1024]; int a=sizeof(buf), foo(0)");
+        ASSERT_EQUALS("", errout.str());
+
+        check("template<class T>\n"
+              "struct A\n"
+              "{\n"
+              "    static B f(const B &);\n"
+              "    static A f(const A &);\n"
+              "    static A &g();\n"
+              "    static T &h();\n"
+              "\n"
+              "    enum {\n"
+              "        X = sizeof(f(g() >> h())) == sizeof(A),\n"
+              "        Y = sizeof(f(g() << h())) == sizeof(A),\n"
+              "        Z = X & Y\n"
+              "    };\n"
+              "};\n");
+        ASSERT_EQUALS("", errout.str());
     }
 
     void sizeofForArrayParameter() {
@@ -202,7 +301,7 @@ private:
         check("typedef char Fixname[1000];\n"
               "int f2(Fixname& f2v) {\n"
               "  int i = sizeof(f2v);\n"
-              "  printf(\"sizeof f2v %d\n\", i);\n"
+              "  printf(\"sizeof f2v %d\", i);\n"
               "   }\n"
              );
         ASSERT_EQUALS("", errout.str());
@@ -647,9 +746,11 @@ private:
               "  void* p = malloc(10);\n"
               "  int* p2 = p + 4;\n"
               "  int* p3 = p - 1;\n"
+              "  int* p4 = 1 + p;\n"
               "}");
         ASSERT_EQUALS("[test.cpp:3]: (portability) 'p' is of type 'void *'. When using void pointers in calculations, the behaviour is undefined.\n"
-                      "[test.cpp:4]: (portability) 'p' is of type 'void *'. When using void pointers in calculations, the behaviour is undefined.\n", errout.str());
+                      "[test.cpp:4]: (portability) 'p' is of type 'void *'. When using void pointers in calculations, the behaviour is undefined.\n"
+                      "[test.cpp:5]: (portability) 'p' is of type 'void *'. When using void pointers in calculations, the behaviour is undefined.\n", errout.str());
 
         check("void f() {\n"
               "  void* p1 = malloc(10);\n"

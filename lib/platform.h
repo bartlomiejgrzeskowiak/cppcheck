@@ -1,6 +1,6 @@
 /*
 * Cppcheck - A tool for static C/C++ code analysis
-* Copyright (C) 2007-2016 Cppcheck team.
+* Copyright (C) 2007-2019 Cppcheck team.
 *
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -22,10 +22,17 @@
 //---------------------------------------------------------------------------
 
 #include "config.h"
+#include "utils.h"
+
+#include <climits>
 #include <string>
 
 /// @addtogroup Core
 /// @{
+
+namespace tinyxml2 {
+    class XMLDocument;
+}
 
 namespace cppcheck {
 
@@ -33,28 +40,48 @@ namespace cppcheck {
     * @brief Platform settings
     */
     class CPPCHECKLIB Platform {
+    private:
+        static long long min_value(int bit) {
+            if (bit >= 64)
+                return LLONG_MIN;
+            return -(1LL << (bit-1));
+        }
+
+        static long long max_value(int bit) {
+            if (bit >= 64)
+                return (~0ULL) >> 1;
+            return (1LL << (bit-1)) - 1LL;
+        }
     public:
         Platform();
         virtual ~Platform() {}
 
-        unsigned int char_bit;       /// bits in char
-        unsigned int short_bit;      /// bits in short
-        unsigned int int_bit;        /// bits in int
-        unsigned int long_bit;       /// bits in long
-        unsigned int long_long_bit;  /// bits in long long
+        bool isIntValue(long long value) const {
+            return value >= min_value(int_bit) && value <= max_value(int_bit);
+        }
+
+        bool isLongValue(long long value) const {
+            return value >= min_value(long_bit) && value <= max_value(long_bit);
+        }
+
+        nonneg int char_bit;       /// bits in char
+        nonneg int short_bit;      /// bits in short
+        nonneg int int_bit;        /// bits in int
+        nonneg int long_bit;       /// bits in long
+        nonneg int long_long_bit;  /// bits in long long
 
         /** size of standard types */
-        unsigned int sizeof_bool;
-        unsigned int sizeof_short;
-        unsigned int sizeof_int;
-        unsigned int sizeof_long;
-        unsigned int sizeof_long_long;
-        unsigned int sizeof_float;
-        unsigned int sizeof_double;
-        unsigned int sizeof_long_double;
-        unsigned int sizeof_wchar_t;
-        unsigned int sizeof_size_t;
-        unsigned int sizeof_pointer;
+        nonneg int sizeof_bool;
+        nonneg int sizeof_short;
+        nonneg int sizeof_int;
+        nonneg int sizeof_long;
+        nonneg int sizeof_long_long;
+        nonneg int sizeof_float;
+        nonneg int sizeof_double;
+        nonneg int sizeof_long_double;
+        nonneg int sizeof_wchar_t;
+        nonneg int sizeof_size_t;
+        nonneg int sizeof_pointer;
 
         char defaultSign;  // unsigned:'u', signed:'s', unknown:'\0'
 
@@ -65,7 +92,8 @@ namespace cppcheck {
             Win32W,
             Win64,
             Unix32,
-            Unix64
+            Unix64,
+            PlatformFile
         };
 
         /** platform type */
@@ -74,8 +102,16 @@ namespace cppcheck {
         /** set the platform type for predefined platforms */
         bool platform(PlatformType type);
 
-        /** set the platform type for user specified platforms */
-        bool platformFile(const std::string &filename);
+        /**
+         * load platform file
+         * @param exename application path
+         * @param filename platform filename
+         * @return returns true if file was loaded successfully
+         */
+        bool loadPlatformFile(const char exename[], const std::string &filename);
+
+        /** load platform from xml document, primarily for testing */
+        bool loadFromXmlDocument(const tinyxml2::XMLDocument *doc);
 
         /**
         * @brief Returns true if platform type is Windows
@@ -88,20 +124,42 @@ namespace cppcheck {
         }
 
         const char *platformString() const {
-            switch (platformType) {
-            case Unix32:
-                return "unix32";
-            case Unix64:
-                return "unix64";
+            return platformString(platformType);
+        }
+
+        static const char *platformString(PlatformType pt) {
+            switch (pt) {
+            case Unspecified:
+                return "Unspecified";
+            case Native:
+                return "Native";
             case Win32A:
                 return "win32A";
             case Win32W:
                 return "win32W";
             case Win64:
                 return "win64";
+            case Unix32:
+                return "unix32";
+            case Unix64:
+                return "unix64";
+            case PlatformFile:
+                return "platformFile";
             default:
                 return "unknown";
             }
+        }
+
+        long long unsignedCharMax() const {
+            return max_value(char_bit + 1);
+        }
+
+        long long signedCharMax() const {
+            return max_value(char_bit);
+        }
+
+        long long signedCharMin() const {
+            return min_value(char_bit);
         }
     };
 

@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,11 +17,13 @@
  */
 
 #include "filelister.h"
+
 #include "path.h"
 #include "pathmatch.h"
-#include <cstring>
-#include <string>
+#include "utils.h"
 
+#include <cstddef>
+#include <cstring>
 
 #ifdef _WIN32
 
@@ -38,7 +40,7 @@
 // When compiling Unicode targets WinAPI automatically uses *W Unicode versions
 // of called functions. Thus, we explicitly call *A versions of the functions.
 
-static BOOL MyIsDirectory(const std::string& path)
+static BOOL myIsDirectory(const std::string& path)
 {
 #ifdef __BORLANDC__
     return (GetFileAttributes(path.c_str()) & FILE_ATTRIBUTE_DIRECTORY);
@@ -48,13 +50,13 @@ static BOOL MyIsDirectory(const std::string& path)
 #endif
 }
 
-static HANDLE MyFindFirstFile(const std::string& path, LPWIN32_FIND_DATAA findData)
+static HANDLE myFindFirstFile(const std::string& path, LPWIN32_FIND_DATAA findData)
 {
     HANDLE hFind = FindFirstFileA(path.c_str(), findData);
     return hFind;
 }
 
-static BOOL MyFileExists(const std::string& path)
+static BOOL myFileExists(const std::string& path)
 {
 #ifdef __BORLANDC__
     DWORD fa = GetFileAttributes(path.c_str());
@@ -62,12 +64,17 @@ static BOOL MyFileExists(const std::string& path)
     if (fa != INVALID_FILE_ATTRIBUTES && !(fa & FILE_ATTRIBUTE_DIRECTORY))
         result = TRUE;
 #else
-    BOOL result = PathFileExistsA(path.c_str());
+    const BOOL result = PathFileExistsA(path.c_str());
 #endif
     return result;
 }
 
 void FileLister::recursiveAddFiles(std::map<std::string, std::size_t> &files, const std::string &path, const std::set<std::string> &extra, const PathMatch& ignored)
+{
+    addFiles(files, path, extra, true, ignored);
+}
+
+void FileLister::addFiles(std::map<std::string, std::size_t> &files, const std::string &path, const std::set<std::string> &extra, bool recursive, const PathMatch& ignored)
 {
     const std::string cleanedPath = Path::toNativeSeparators(path);
 
@@ -79,10 +86,10 @@ void FileLister::recursiveAddFiles(std::map<std::string, std::size_t> &files, co
     std::string searchPattern = cleanedPath;
 
     // The user wants to check all files in a dir
-    const bool checkAllFilesInDir = (MyIsDirectory(cleanedPath) != FALSE);
+    const bool checkAllFilesInDir = (myIsDirectory(cleanedPath) != FALSE);
 
     if (checkAllFilesInDir) {
-        char c = cleanedPath[ cleanedPath.size()-1 ];
+        const char c = cleanedPath.back();
         switch (c) {
         case '\\':
             searchPattern += '*';
@@ -97,14 +104,14 @@ void FileLister::recursiveAddFiles(std::map<std::string, std::size_t> &files, co
                 basedir = cleanedPath + '\\';
         }
     } else {
-        std::string::size_type pos = cleanedPath.find_last_of('\\');
+        const std::string::size_type pos = cleanedPath.find_last_of('\\');
         if (std::string::npos != pos) {
             basedir = cleanedPath.substr(0, pos + 1);
         }
     }
 
     WIN32_FIND_DATAA ffd;
-    HANDLE hFind = MyFindFirstFile(searchPattern, &ffd);
+    HANDLE hFind = myFindFirstFile(searchPattern, &ffd);
     if (INVALID_HANDLE_VALUE == hFind)
         return;
 
@@ -121,7 +128,7 @@ void FileLister::recursiveAddFiles(std::map<std::string, std::size_t> &files, co
 
         if ((ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0) {
             // File
-            if ((!checkAllFilesInDir || Path::acceptFile(fname, extra)) && !ignored.Match(fname)) {
+            if ((!checkAllFilesInDir || Path::acceptFile(fname, extra)) && !ignored.match(fname)) {
                 const std::string nativename = Path::fromNativeSeparators(fname);
 
                 // Limitation: file sizes are assumed to fit in a 'size_t'
@@ -133,8 +140,10 @@ void FileLister::recursiveAddFiles(std::map<std::string, std::size_t> &files, co
             }
         } else {
             // Directory
-            if (!ignored.Match(fname))
-                FileLister::recursiveAddFiles(files, fname, extra, ignored);
+            if (recursive) {
+                if (!ignored.match(fname))
+                    FileLister::recursiveAddFiles(files, fname, extra, ignored);
+            }
         }
     } while (FindNextFileA(hFind, &ffd) != FALSE);
 
@@ -143,12 +152,12 @@ void FileLister::recursiveAddFiles(std::map<std::string, std::size_t> &files, co
 
 bool FileLister::isDirectory(const std::string &path)
 {
-    return (MyIsDirectory(path) != FALSE);
+    return (myIsDirectory(path) != FALSE);
 }
 
 bool FileLister::fileExists(const std::string &path)
 {
-    return (MyFileExists(path) != FALSE);
+    return (myFileExists(path) != FALSE);
 }
 
 
@@ -163,9 +172,6 @@ bool FileLister::fileExists(const std::string &path)
 #endif
 
 #include <dirent.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <limits.h>
 #include <sys/stat.h>
 
 
@@ -180,17 +186,15 @@ static void addFiles2(std::map<std::string, std::size_t> &files,
     if (stat(path.c_str(), &file_stat) != -1) {
         if ((file_stat.st_mode & S_IFMT) == S_IFDIR) {
             DIR * dir = opendir(path.c_str());
-
             if (!dir)
                 return;
 
             dirent entry;
             dirent * dir_result;
-
             std::string new_path;
             new_path.reserve(path.length() + 100);// prealloc some memory to avoid constant new/deletes in loop
 
-            while ((readdir_r(dir, &entry, &dir_result) == 0) && (dir_result != NULL)) {
+            while ((readdir_r(dir, &entry, &dir_result) == 0) && (dir_result != nullptr)) {
 
                 if ((std::strcmp(dir_result->d_name, ".") == 0) ||
                     (std::strcmp(dir_result->d_name, "..") == 0))
@@ -198,12 +202,18 @@ static void addFiles2(std::map<std::string, std::size_t> &files,
 
                 new_path = path + '/' + dir_result->d_name;
 
-                if (dir_result->d_type == DT_DIR || (dir_result->d_type == DT_UNKNOWN && FileLister::isDirectory(new_path))) {
-                    if (recursive && !ignored.Match(new_path)) {
+#if defined(_DIRENT_HAVE_D_TYPE) || defined(_BSD_SOURCE)
+                bool path_is_directory = (dir_result->d_type == DT_DIR || (dir_result->d_type == DT_UNKNOWN && FileLister::isDirectory(new_path)));
+#else
+                bool path_is_directory = FileLister::isDirectory(new_path);
+#endif
+                if (path_is_directory) {
+                    if (recursive && !ignored.match(new_path)) {
                         addFiles2(files, new_path, extra, recursive, ignored);
                     }
                 } else {
-                    if (Path::acceptFile(new_path, extra) && !ignored.Match(new_path)) {
+                    if (Path::acceptFile(new_path, extra) && !ignored.match(new_path)) {
+                        stat(new_path.c_str(), &file_stat);
                         files[new_path] = file_stat.st_size;
                     }
                 }
@@ -223,7 +233,7 @@ void FileLister::addFiles(std::map<std::string, std::size_t> &files, const std::
 {
     if (!path.empty()) {
         std::string corrected_path = path;
-        if (corrected_path.back() == '/')
+        if (endsWith(corrected_path, '/'))
             corrected_path.erase(corrected_path.end() - 1);
 
         addFiles2(files, corrected_path, extra, recursive, ignored);
@@ -233,19 +243,13 @@ void FileLister::addFiles(std::map<std::string, std::size_t> &files, const std::
 bool FileLister::isDirectory(const std::string &path)
 {
     struct stat file_stat;
-    if (stat(path.c_str(), &file_stat) != -1)
-        return ((file_stat.st_mode & S_IFMT) == S_IFDIR);
-
-    return false;
+    return (stat(path.c_str(), &file_stat) != -1 && (file_stat.st_mode & S_IFMT) == S_IFDIR);
 }
 
 bool FileLister::fileExists(const std::string &path)
 {
     struct stat file_stat;
-    if (stat(path.c_str(), &file_stat) != -1)
-        return ((file_stat.st_mode & S_IFMT) == S_IFREG);
-
-    return false;
+    return (stat(path.c_str(), &file_stat) != -1 && (file_stat.st_mode & S_IFMT) == S_IFREG);
 }
 
 #endif

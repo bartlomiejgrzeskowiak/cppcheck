@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2018 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,22 +17,23 @@
  */
 
 #include <QString>
-#include <QStringList>
 #include <QDir>
 #include <QFileInfo>
 #include "filelist.h"
+#include "path.h"
+#include "pathmatch.h"
 
-QStringList FileList::GetDefaultFilters()
+QStringList FileList::getDefaultFilters()
 {
     QStringList extensions;
     extensions << "*.cpp" << "*.cxx" << "*.cc" << "*.c" << "*.c++" << "*.txx" << "*.tpp";
     return extensions;
 }
 
-bool FileList::FilterMatches(const QFileInfo &inf)
+bool FileList::filterMatches(const QFileInfo &inf)
 {
     if (inf.isFile()) {
-        const QStringList filters = FileList::GetDefaultFilters();
+        const QStringList filters = FileList::getDefaultFilters();
         QString ext("*.");
         ext += inf.suffix();
         if (filters.contains(ext, Qt::CaseInsensitive))
@@ -41,18 +42,18 @@ bool FileList::FilterMatches(const QFileInfo &inf)
     return false;
 }
 
-void FileList::AddFile(const QString &filepath)
+void FileList::addFile(const QString &filepath)
 {
     QFileInfo inf(filepath);
-    if (FilterMatches(inf))
+    if (filterMatches(inf))
         mFileList << inf;
 }
 
-void FileList::AddDirectory(const QString &directory, bool recursive)
+void FileList::addDirectory(const QString &directory, bool recursive)
 {
     QDir dir(directory);
     dir.setSorting(QDir::Name);
-    const QStringList filters = FileList::GetDefaultFilters();
+    const QStringList filters = FileList::getDefaultFilters();
     const QStringList origNameFilters = dir.nameFilters();
     dir.setNameFilters(filters);
     if (!recursive) {
@@ -70,64 +71,64 @@ void FileList::AddDirectory(const QString &directory, bool recursive)
         QFileInfo item;
         foreach (item, list) {
             const QString path = item.canonicalFilePath();
-            AddDirectory(path, recursive);
+            addDirectory(path, recursive);
         }
     }
 }
 
-void FileList::AddPathList(const QStringList &paths)
+void FileList::addPathList(const QStringList &paths)
 {
     QString path;
     foreach (path, paths) {
         QFileInfo inf(path);
         if (inf.isFile())
-            AddFile(path);
+            addFile(path);
         else
-            AddDirectory(path, true);
+            addDirectory(path, true);
     }
 }
 
-QStringList FileList::GetFileList() const
+QStringList FileList::getFileList() const
 {
     if (mExcludedPaths.empty()) {
         QStringList names;
         foreach (QFileInfo item, mFileList) {
-            QString name = QDir::fromNativeSeparators(item.canonicalFilePath());
+            QString name = QDir::fromNativeSeparators(item.filePath());
             names << name;
         }
         return names;
     } else {
-        return ApplyExcludeList();
+        return applyExcludeList();
     }
 }
 
-void FileList::AddExcludeList(const QStringList &paths)
+void FileList::addExcludeList(const QStringList &paths)
 {
     mExcludedPaths = paths;
 }
 
-QStringList FileList::ApplyExcludeList() const
+static std::vector<std::string> toStdStringList(const QStringList &stringList)
 {
+    std::vector<std::string> ret;
+    foreach (const QString &s, stringList) {
+        ret.push_back(s.toStdString());
+    }
+    return ret;
+}
+
+QStringList FileList::applyExcludeList() const
+{
+#ifdef _WIN32
+    const PathMatch pathMatch(toStdStringList(mExcludedPaths), true);
+#else
+    const PathMatch pathMatch(toStdStringList(mExcludedPaths), false);
+#endif
+
     QStringList paths;
     foreach (QFileInfo item, mFileList) {
         QString name = QDir::fromNativeSeparators(item.canonicalFilePath());
-        if (!Match(name))
+        if (!pathMatch.match(name.toStdString()))
             paths << name;
     }
     return paths;
-}
-
-bool FileList::Match(const QString &path) const
-{
-    for (int i = 0; i < mExcludedPaths.size(); i++) {
-        if (mExcludedPaths[i].endsWith('/')) {
-            const QString pathexclude("/" + mExcludedPaths[i]);
-            if (path.indexOf(pathexclude) != -1)
-                return true;
-        } else {
-            if (path.endsWith(mExcludedPaths[i]))
-                return true;
-        }
-    }
-    return false;
 }

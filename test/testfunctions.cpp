@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,10 +16,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "tokenize.h"
-#include "checkfunctions.h"
-#include "testsuite.h"
 #include <tinyxml2.h>
+
+#include "checkfunctions.h"
+#include "library.h"
+#include "settings.h"
+#include "standards.h"
+#include "testsuite.h"
+#include "tokenize.h"
 
 
 class TestFunctions : public TestFixture {
@@ -30,11 +34,11 @@ public:
 private:
     Settings settings;
 
-    void run() {
+    void run() OVERRIDE {
         settings.addEnabled("style");
         settings.addEnabled("warning");
         settings.addEnabled("portability");
-        settings.standards.posix = true;
+        settings.libraries.emplace_back("posix");
         settings.standards.c = Standards::C11;
         settings.standards.cpp = Standards::CPP11;
         LOAD_LIB_2(settings.library, "std.cfg");
@@ -58,6 +62,7 @@ private:
 
         // Invalid function usage
         TEST_CASE(invalidFunctionUsage1);
+        // TODO TEST_CASE(invalidFunctionUsageStrings);
 
         // Math function usage
         TEST_CASE(mathfunctionCall_fmod);
@@ -71,6 +76,10 @@ private:
 
         // Ignored return value
         TEST_CASE(checkIgnoredReturnValue);
+
+        // memset..
+        TEST_CASE(memsetZeroBytes);
+        TEST_CASE(memsetInvalid2ndParam);
     }
 
     void check(const char code[], const char filename[]="test.cpp", const Settings* settings_=nullptr) {
@@ -86,17 +95,7 @@ private:
         tokenizer.tokenize(istr, filename);
 
         CheckFunctions checkFunctions(&tokenizer, settings_, this);
-
-        // Check...
-        checkFunctions.checkIgnoredReturnValue();
-
-        // Simplify...
-        tokenizer.simplifyTokenList2();
-
-        // Check...
-        checkFunctions.checkProhibitedFunctions();
-        checkFunctions.checkMathFunctions();
-        checkFunctions.invalidFunctionUsage();
+        checkFunctions.runChecks(&tokenizer, settings_, this);
     }
 
     void prohibitedFunctions_posix() {
@@ -361,7 +360,7 @@ private:
         // Passed as function argument
         check("int f()\n"
               "{\n"
-              "    printf(\"Magic guess: %d\n\", getpwent());\n"
+              "    printf(\"Magic guess: %d\", getpwent());\n"
               "}");
         ASSERT_EQUALS("[test.cpp:3]: (portability) Non reentrant function 'getpwent' called. For threadsafe applications it is recommended to use the reentrant replacement function 'getpwent_r'.\n", errout.str());
 
@@ -433,14 +432,129 @@ private:
               "}");
         ASSERT_EQUALS("[test.cpp:2]: (error) Invalid memset() argument nr 3. A non-boolean value is required.\n", errout.str());
 
-        check("int f() { strtol(a,b,sizeof(a)!=12); }");
-        ASSERT_EQUALS("[test.cpp:1]: (error) Invalid strtol() argument nr 3. The value is 0 or 1 (comparison result) but the valid values are '0,2:36'.\n", errout.str());
+        check("void boolArgZeroIsInvalidButOneIsValid(int param) {\n"
+              "  void* buffer = calloc(param > 0, 10);\n"
+              "  free(buffer);\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (error) Invalid calloc() argument nr 1. The value is 0 or 1 (boolean) but the valid values are '1:'.\n", errout.str());
+
+        check("void boolArgZeroIsValidButOneIsInvalid(int param) {\n"
+              "  strtol(a, b, param > 0);\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (error) Invalid strtol() argument nr 3. The value is 0 or 1 (boolean) but the valid values are '0,2:36'.\n", errout.str());
 
         check("int f() { strtol(a,b,1); }");
         ASSERT_EQUALS("[test.cpp:1]: (error) Invalid strtol() argument nr 3. The value is 1 but the valid values are '0,2:36'.\n", errout.str());
 
         check("int f() { strtol(a,b,10); }");
         ASSERT_EQUALS("", errout.str());
+    }
+
+    void invalidFunctionUsageStrings() {
+        check("size_t f() { char x = 'x'; return strlen(&x); }");
+        ASSERT_EQUALS("[test.cpp:1]: (error) Invalid strlen() argument nr 1. A nul-terminated string is required.\n", errout.str());
+
+        check("size_t f() { return strlen(&x); }");
+        ASSERT_EQUALS("", errout.str());
+
+        check("size_t f(char x) { return strlen(&x); }");
+        ASSERT_EQUALS("[test.cpp:1]: (error) Invalid strlen() argument nr 1. A nul-terminated string is required.\n", errout.str());
+
+        check("size_t f() { char x = '\\0'; return strlen(&x); }");
+        ASSERT_EQUALS("", errout.str());
+
+        check("size_t f() {\n"
+              "  char x;\n"
+              "  if (y)\n"
+              "    x = '\\0';\n"
+              "  else\n"
+              "    x = 'a';\n"
+              "  return strlen(&x);\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:7]: (error) Invalid strlen() argument nr 1. A nul-terminated string is required.\n", errout.str());
+
+        check("int f() { char x = '\\0'; return strcmp(\"Hello world\", &x); }");
+        ASSERT_EQUALS("", errout.str());
+
+        check("int f() { char x = 'x'; return strcmp(\"Hello world\", &x); }");
+        ASSERT_EQUALS("[test.cpp:1]: (error) Invalid strcmp() argument nr 2. A nul-terminated string is required.\n", errout.str());
+
+        check("size_t f(char x) { char * y = &x; return strlen(y) }");
+        ASSERT_EQUALS("[test.cpp:1]: (error) Invalid strlen() argument nr 1. A nul-terminated string is required.\n", errout.str());
+
+        check("size_t f(char x) { char * y = &x; char *z = y; return strlen(z) }");
+        ASSERT_EQUALS("[test.cpp:1]: (error) Invalid strlen() argument nr 1. A nul-terminated string is required.\n", errout.str());
+
+        check("size_t f() { char x = 'x'; char * y = &x; char *z = y; return strlen(z) }");
+        ASSERT_EQUALS("[test.cpp:1]: (error) Invalid strlen() argument nr 1. A nul-terminated string is required.\n", errout.str());
+
+        check("size_t f() { char x = '\\0'; char * y = &x; char *z = y; return strlen(z) }");
+        ASSERT_EQUALS("", errout.str());
+
+        check("size_t f() { char x[] = \"Hello world\"; return strlen(x) }");
+        ASSERT_EQUALS("", errout.str());
+
+        check("size_t f(char x[]) { return strlen(x) }");
+        ASSERT_EQUALS("", errout.str());
+
+        check("int f(char x, char y) { return strcmp(&x, &y); }");
+        ASSERT_EQUALS("[test.cpp:1]: (error) Invalid strcmp() argument nr 1. A nul-terminated string is required.\n"
+                      "[test.cpp:1]: (error) Invalid strcmp() argument nr 2. A nul-terminated string is required.\n", errout.str());
+
+        check("size_t f() { char x[] = \"Hello world\"; return strlen(&x[0]) }");
+        ASSERT_EQUALS("", errout.str());
+
+        check("size_t f() { char* x = \"Hello world\"; return strlen(&x[0]) }");
+        ASSERT_EQUALS("", errout.str());
+
+        check("struct S {\n"
+              "  char x;\n"
+              "};\n"
+              "size_t f() {\n"
+              "  S s1 = {0};\n"
+              "  S s2;\n;"
+              "  s2.x = 'x';\n"
+              "  size_t l1 = strlen(&s1.x);\n"
+              "  size_t l2 = strlen(&s2.x);\n"
+              "  return l1 + l2;\n"
+              "}\n");
+        TODO_ASSERT_EQUALS("[test.cpp:9]: (error) Invalid strlen() argument nr 1. A nul-terminated string is required.\n", "", errout.str());
+
+        check("const char x = 'x'; size_t f() { return strlen(&x); }");
+        TODO_ASSERT_EQUALS("[test.cpp:1]: (error) Invalid strlen() argument nr 1. A nul-terminated string is required.\n", "", errout.str());
+
+        check("const char x = 'x'; size_t f() { char y = x; return strlen(&y); }");
+        ASSERT_EQUALS("[test.cpp:1]: (error) Invalid strlen() argument nr 1. A nul-terminated string is required.\n", errout.str());
+
+        check("const char x = '\\0'; size_t f() { return strlen(&x); }");
+        ASSERT_EQUALS("", errout.str());
+
+        check("const char x = '\\0'; size_t f() { char y = x; return strlen(&y); }");
+        ASSERT_EQUALS("", errout.str());
+
+        check("size_t f() {\n"
+              "  char * a = \"Hello world\";\n"
+              "  char ** b = &a;\n"
+              "  return strlen(&b[0][0]);\n"
+              "}\n");
+        ASSERT_EQUALS("", errout.str());
+
+        check("size_t f() {\n"
+              "  char ca[] = \"asdf\";\n"
+              "  return strlen((char*) &ca);\n"
+              "}\n");
+        ASSERT_EQUALS("", errout.str());
+
+        // #5225
+        check("int main(void)\n"
+              "{\n"
+              "  char str[80] = \"hello worl\";\n"
+              "  char d = 'd';\n"
+              "  strcat(str, &d);\n"
+              "  puts(str);\n"
+              "  return 0;\n"
+              "}\n");
+        ASSERT_EQUALS("[test.cpp:5]: (error) Invalid strcat() argument nr 2. A nul-terminated string is required.\n", errout.str());
     }
 
     void mathfunctionCall_sqrt() {
@@ -451,9 +565,9 @@ private:
               "    std::cout <<  sqrtf(-1) << std::endl;\n"
               "    std::cout <<  sqrtl(-1) << std::endl;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value -1 to sqrt() leads to implementation-defined result.\n"
-                      "[test.cpp:4]: (warning) Passing value -1 to sqrtf() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing value -1 to sqrtl() leads to implementation-defined result.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (error) Invalid sqrt() argument nr 1. The value is -1 but the valid values are '0.0:'.\n"
+                      "[test.cpp:4]: (error) Invalid sqrtf() argument nr 1. The value is -1 but the valid values are '0.0:'.\n"
+                      "[test.cpp:5]: (error) Invalid sqrtl() argument nr 1. The value is -1 but the valid values are '0.0:'.\n", errout.str());
 
         // implementation-defined behaviour for "finite values of x<0" only:
         check("void foo()\n"
@@ -474,71 +588,197 @@ private:
     }
 
     void mathfunctionCall_log() {
-        // log,log10,logf,logl,log10f,log10l
+        // log,log10,logf,logl,log10f,log10l,log2,log2f,log2l,log1p,log1pf,log1pl
         check("void foo()\n"
               "{\n"
               "    std::cout <<  log(-2) << std::endl;\n"
               "    std::cout <<  logf(-2) << std::endl;\n"
               "    std::cout <<  logl(-2) << std::endl;\n"
+              "    std::cout <<  log10(-2) << std::endl;\n"
+              "    std::cout <<  log10f(-2) << std::endl;\n"
+              "    std::cout <<  log10l(-2) << std::endl;\n"
+              "    std::cout <<  log2(-2) << std::endl;\n"
+              "    std::cout <<  log2f(-2) << std::endl;\n"
+              "    std::cout <<  log2l(-2) << std::endl;\n"
+              "    std::cout <<  log1p(-3) << std::endl;\n"
+              "    std::cout <<  log1pf(-3) << std::endl;\n"
+              "    std::cout <<  log1pl(-3) << std::endl;\n"
               "}");
         ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value -2 to log() leads to implementation-defined result.\n"
                       "[test.cpp:4]: (warning) Passing value -2 to logf() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing value -2 to logl() leads to implementation-defined result.\n", errout.str());
+                      "[test.cpp:5]: (warning) Passing value -2 to logl() leads to implementation-defined result.\n"
+                      "[test.cpp:6]: (warning) Passing value -2 to log10() leads to implementation-defined result.\n"
+                      "[test.cpp:7]: (warning) Passing value -2 to log10f() leads to implementation-defined result.\n"
+                      "[test.cpp:8]: (warning) Passing value -2 to log10l() leads to implementation-defined result.\n"
+                      "[test.cpp:9]: (warning) Passing value -2 to log2() leads to implementation-defined result.\n"
+                      "[test.cpp:10]: (warning) Passing value -2 to log2f() leads to implementation-defined result.\n"
+                      "[test.cpp:11]: (warning) Passing value -2 to log2l() leads to implementation-defined result.\n"
+                      "[test.cpp:12]: (warning) Passing value -3 to log1p() leads to implementation-defined result.\n"
+                      "[test.cpp:13]: (warning) Passing value -3 to log1pf() leads to implementation-defined result.\n"
+                      "[test.cpp:14]: (warning) Passing value -3 to log1pl() leads to implementation-defined result.\n", errout.str());
 
         check("void foo()\n"
               "{\n"
               "    std::cout <<  log(-1) << std::endl;\n"
               "    std::cout <<  logf(-1) << std::endl;\n"
               "    std::cout <<  logl(-1) << std::endl;\n"
+              "    std::cout <<  log10(-1) << std::endl;\n"
+              "    std::cout <<  log10f(-1) << std::endl;\n"
+              "    std::cout <<  log10l(-1) << std::endl;\n"
+              "    std::cout <<  log2(-1) << std::endl;\n"
+              "    std::cout <<  log2f(-1) << std::endl;\n"
+              "    std::cout <<  log2l(-1) << std::endl;\n"
+              "    std::cout <<  log1p(-2) << std::endl;\n"
+              "    std::cout <<  log1pf(-2) << std::endl;\n"
+              "    std::cout <<  log1pl(-2) << std::endl;\n"
               "}");
         ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value -1 to log() leads to implementation-defined result.\n"
                       "[test.cpp:4]: (warning) Passing value -1 to logf() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing value -1 to logl() leads to implementation-defined result.\n", errout.str());
+                      "[test.cpp:5]: (warning) Passing value -1 to logl() leads to implementation-defined result.\n"
+                      "[test.cpp:6]: (warning) Passing value -1 to log10() leads to implementation-defined result.\n"
+                      "[test.cpp:7]: (warning) Passing value -1 to log10f() leads to implementation-defined result.\n"
+                      "[test.cpp:8]: (warning) Passing value -1 to log10l() leads to implementation-defined result.\n"
+                      "[test.cpp:9]: (warning) Passing value -1 to log2() leads to implementation-defined result.\n"
+                      "[test.cpp:10]: (warning) Passing value -1 to log2f() leads to implementation-defined result.\n"
+                      "[test.cpp:11]: (warning) Passing value -1 to log2l() leads to implementation-defined result.\n"
+                      "[test.cpp:12]: (warning) Passing value -2 to log1p() leads to implementation-defined result.\n"
+                      "[test.cpp:13]: (warning) Passing value -2 to log1pf() leads to implementation-defined result.\n"
+                      "[test.cpp:14]: (warning) Passing value -2 to log1pl() leads to implementation-defined result.\n", errout.str());
 
         check("void foo()\n"
               "{\n"
               "    std::cout <<  log(-1.0) << std::endl;\n"
               "    std::cout <<  logf(-1.0) << std::endl;\n"
               "    std::cout <<  logl(-1.0) << std::endl;\n"
+              "    std::cout <<  log10(-1.0) << std::endl;\n"
+              "    std::cout <<  log10f(-1.0) << std::endl;\n"
+              "    std::cout <<  log10l(-1.0) << std::endl;\n"
+              "    std::cout <<  log2(-1.0) << std::endl;\n"
+              "    std::cout <<  log2f(-1.0) << std::endl;\n"
+              "    std::cout <<  log2l(-1.0) << std::endl;\n"
+              "    std::cout <<  log1p(-2.0) << std::endl;\n"
+              "    std::cout <<  log1pf(-2.0) << std::endl;\n"
+              "    std::cout <<  log1pl(-2.0) << std::endl;\n"
               "}");
         ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value -1.0 to log() leads to implementation-defined result.\n"
                       "[test.cpp:4]: (warning) Passing value -1.0 to logf() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing value -1.0 to logl() leads to implementation-defined result.\n", errout.str());
+                      "[test.cpp:5]: (warning) Passing value -1.0 to logl() leads to implementation-defined result.\n"
+                      "[test.cpp:6]: (warning) Passing value -1.0 to log10() leads to implementation-defined result.\n"
+                      "[test.cpp:7]: (warning) Passing value -1.0 to log10f() leads to implementation-defined result.\n"
+                      "[test.cpp:8]: (warning) Passing value -1.0 to log10l() leads to implementation-defined result.\n"
+                      "[test.cpp:9]: (warning) Passing value -1.0 to log2() leads to implementation-defined result.\n"
+                      "[test.cpp:10]: (warning) Passing value -1.0 to log2f() leads to implementation-defined result.\n"
+                      "[test.cpp:11]: (warning) Passing value -1.0 to log2l() leads to implementation-defined result.\n"
+                      "[test.cpp:12]: (warning) Passing value -2.0 to log1p() leads to implementation-defined result.\n"
+                      "[test.cpp:13]: (warning) Passing value -2.0 to log1pf() leads to implementation-defined result.\n"
+                      "[test.cpp:14]: (warning) Passing value -2.0 to log1pl() leads to implementation-defined result.\n", errout.str());
 
         check("void foo()\n"
               "{\n"
               "    std::cout <<  log(-0.1) << std::endl;\n"
               "    std::cout <<  logf(-0.1) << std::endl;\n"
               "    std::cout <<  logl(-0.1) << std::endl;\n"
+              "    std::cout <<  log10(-0.1) << std::endl;\n"
+              "    std::cout <<  log10f(-0.1) << std::endl;\n"
+              "    std::cout <<  log10l(-0.1) << std::endl;\n"
+              "    std::cout <<  log2(-0.1) << std::endl;\n"
+              "    std::cout <<  log2f(-0.1) << std::endl;\n"
+              "    std::cout <<  log2l(-0.1) << std::endl;\n"
+              "    std::cout <<  log1p(-1.1) << std::endl;\n"
+              "    std::cout <<  log1pf(-1.1) << std::endl;\n"
+              "    std::cout <<  log1pl(-1.1) << std::endl;\n"
               "}");
         ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value -0.1 to log() leads to implementation-defined result.\n"
                       "[test.cpp:4]: (warning) Passing value -0.1 to logf() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing value -0.1 to logl() leads to implementation-defined result.\n", errout.str());
+                      "[test.cpp:5]: (warning) Passing value -0.1 to logl() leads to implementation-defined result.\n"
+                      "[test.cpp:6]: (warning) Passing value -0.1 to log10() leads to implementation-defined result.\n"
+                      "[test.cpp:7]: (warning) Passing value -0.1 to log10f() leads to implementation-defined result.\n"
+                      "[test.cpp:8]: (warning) Passing value -0.1 to log10l() leads to implementation-defined result.\n"
+                      "[test.cpp:9]: (warning) Passing value -0.1 to log2() leads to implementation-defined result.\n"
+                      "[test.cpp:10]: (warning) Passing value -0.1 to log2f() leads to implementation-defined result.\n"
+                      "[test.cpp:11]: (warning) Passing value -0.1 to log2l() leads to implementation-defined result.\n"
+                      "[test.cpp:12]: (warning) Passing value -1.1 to log1p() leads to implementation-defined result.\n"
+                      "[test.cpp:13]: (warning) Passing value -1.1 to log1pf() leads to implementation-defined result.\n"
+                      "[test.cpp:14]: (warning) Passing value -1.1 to log1pl() leads to implementation-defined result.\n", errout.str());
 
         check("void foo()\n"
               "{\n"
               "    std::cout <<  log(0) << std::endl;\n"
               "    std::cout <<  logf(0.) << std::endl;\n"
               "    std::cout <<  logl(0.0) << std::endl;\n"
+              "    std::cout <<  log10(0.0) << std::endl;\n"
+              "    std::cout <<  log10f(0) << std::endl;\n"
+              "    std::cout <<  log10l(0.) << std::endl;\n"
+              "    std::cout <<  log2(0.) << std::endl;\n"
+              "    std::cout <<  log2f(0.0) << std::endl;\n"
+              "    std::cout <<  log2l(0) << std::endl;\n"
+              "    std::cout <<  log1p(-1.) << std::endl;\n"
+              "    std::cout <<  log1pf(-1.0) << std::endl;\n"
+              "    std::cout <<  log1pl(-1) << std::endl;\n"
               "}");
         ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value 0 to log() leads to implementation-defined result.\n"
                       "[test.cpp:4]: (warning) Passing value 0. to logf() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing value 0.0 to logl() leads to implementation-defined result.\n", errout.str());
+                      "[test.cpp:5]: (warning) Passing value 0.0 to logl() leads to implementation-defined result.\n"
+                      "[test.cpp:6]: (warning) Passing value 0.0 to log10() leads to implementation-defined result.\n"
+                      "[test.cpp:7]: (warning) Passing value 0 to log10f() leads to implementation-defined result.\n"
+                      "[test.cpp:8]: (warning) Passing value 0. to log10l() leads to implementation-defined result.\n"
+                      "[test.cpp:9]: (warning) Passing value 0. to log2() leads to implementation-defined result.\n"
+                      "[test.cpp:10]: (warning) Passing value 0.0 to log2f() leads to implementation-defined result.\n"
+                      "[test.cpp:11]: (warning) Passing value 0 to log2l() leads to implementation-defined result.\n"
+                      "[test.cpp:12]: (warning) Passing value -1. to log1p() leads to implementation-defined result.\n"
+                      "[test.cpp:13]: (warning) Passing value -1.0 to log1pf() leads to implementation-defined result.\n"
+                      "[test.cpp:14]: (warning) Passing value -1 to log1pl() leads to implementation-defined result.\n", errout.str());
 
         check("void foo()\n"
               "{\n"
-              "    std::cout <<  log(1E-3)    << std::endl;\n"
-              "    std::cout <<  logf(1E-3)   << std::endl;\n"
-              "    std::cout <<  logl(1E-3)   << std::endl;\n"
-              "    std::cout <<  log(1.0E-3)  << std::endl;\n"
-              "    std::cout <<  logf(1.0E-3) << std::endl;\n"
-              "    std::cout <<  logl(1.0E-3) << std::endl;\n"
-              "    std::cout <<  log(1.0E+3)  << std::endl;\n"
-              "    std::cout <<  logf(1.0E+3) << std::endl;\n"
-              "    std::cout <<  logl(1.0E+3) << std::endl;\n"
-              "    std::cout <<  log(2.0)     << std::endl;\n"
-              "    std::cout <<  logf(2.0)    << std::endl;\n"
-              "    std::cout <<  logf(2.0f)   << std::endl;\n"
+              "    std::cout <<  log(1E-3)         << std::endl;\n"
+              "    std::cout <<  logf(1E-3)        << std::endl;\n"
+              "    std::cout <<  logl(1E-3)        << std::endl;\n"
+              "    std::cout <<  log10(1E-3)       << std::endl;\n"
+              "    std::cout <<  log10f(1E-3)      << std::endl;\n"
+              "    std::cout <<  log10l(1E-3)      << std::endl;\n"
+              "    std::cout <<  log2(1E-3)        << std::endl;\n"
+              "    std::cout <<  log2f(1E-3)       << std::endl;\n"
+              "    std::cout <<  log2l(1E-3)       << std::endl;\n"
+              "    std::cout <<  log1p(-1+1E-3)    << std::endl;\n"
+              "    std::cout <<  log1pf(-1+1E-3)   << std::endl;\n"
+              "    std::cout <<  log1pl(-1+1E-3)   << std::endl;\n"
+              "    std::cout <<  log(1.0E-3)       << std::endl;\n"
+              "    std::cout <<  logf(1.0E-3)      << std::endl;\n"
+              "    std::cout <<  logl(1.0E-3)      << std::endl;\n"
+              "    std::cout <<  log10(1.0E-3)     << std::endl;\n"
+              "    std::cout <<  log10f(1.0E-3)    << std::endl;\n"
+              "    std::cout <<  log10l(1.0E-3)    << std::endl;\n"
+              "    std::cout <<  log2(1.0E-3)      << std::endl;\n"
+              "    std::cout <<  log2f(1.0E-3)     << std::endl;\n"
+              "    std::cout <<  log2l(1.0E-3)     << std::endl;\n"
+              "    std::cout <<  log1p(-1+1.0E-3)  << std::endl;\n"
+              "    std::cout <<  log1pf(-1+1.0E-3) << std::endl;\n"
+              "    std::cout <<  log1pl(-1+1.0E-3) << std::endl;\n"
+              "    std::cout <<  log(1.0E+3)       << std::endl;\n"
+              "    std::cout <<  logf(1.0E+3)      << std::endl;\n"
+              "    std::cout <<  logl(1.0E+3)      << std::endl;\n"
+              "    std::cout <<  log10(1.0E+3)     << std::endl;\n"
+              "    std::cout <<  log10f(1.0E+3)    << std::endl;\n"
+              "    std::cout <<  log10l(1.0E+3)    << std::endl;\n"
+              "    std::cout <<  log2(1.0E+3)      << std::endl;\n"
+              "    std::cout <<  log2f(1.0E+3)     << std::endl;\n"
+              "    std::cout <<  log2l(1.0E+3)     << std::endl;\n"
+              "    std::cout <<  log1p(1.0E+3)     << std::endl;\n"
+              "    std::cout <<  log1pf(1.0E+3)    << std::endl;\n"
+              "    std::cout <<  log1pl(1.0E+3)    << std::endl;\n"
+              "    std::cout <<  log(2.0)          << std::endl;\n"
+              "    std::cout <<  logf(2.0)         << std::endl;\n"
+              "    std::cout <<  logf(2.0f)        << std::endl;\n"
+              "    std::cout <<  log10(2.0)        << std::endl;\n"
+              "    std::cout <<  log10f(2.0)       << std::endl;\n"
+              "    std::cout <<  log10f(2.0f)      << std::endl;\n"
+              "    std::cout <<  log2(2.0)         << std::endl;\n"
+              "    std::cout <<  log2f(2.0)        << std::endl;\n"
+              "    std::cout <<  log2f(2.0f)       << std::endl;\n"
+              "    std::cout <<  log1p(2.0)        << std::endl;\n"
+              "    std::cout <<  log1pf(2.0)       << std::endl;\n"
+              "    std::cout <<  log1pf(2.0f)      << std::endl;\n"
               "}");
         ASSERT_EQUALS("", errout.str());
 
@@ -600,9 +840,9 @@ private:
               "    std::cout <<  acosf(1.1) << std::endl;\n"
               "    std::cout <<  acosl(1.1) << std::endl;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value 1.1 to acos() leads to implementation-defined result.\n"
-                      "[test.cpp:4]: (warning) Passing value 1.1 to acosf() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing value 1.1 to acosl() leads to implementation-defined result.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (error) Invalid acos() argument nr 1. The value is 1.1 but the valid values are '-1.0:1.0'.\n"
+                      "[test.cpp:4]: (error) Invalid acosf() argument nr 1. The value is 1.1 but the valid values are '-1.0:1.0'.\n"
+                      "[test.cpp:5]: (error) Invalid acosl() argument nr 1. The value is 1.1 but the valid values are '-1.0:1.0'.\n", errout.str());
 
         check("void foo()\n"
               "{\n"
@@ -610,9 +850,9 @@ private:
               "    std::cout <<  acosf(-1.1) << std::endl;\n"
               "    std::cout <<  acosl(-1.1) << std::endl;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value -1.1 to acos() leads to implementation-defined result.\n"
-                      "[test.cpp:4]: (warning) Passing value -1.1 to acosf() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing value -1.1 to acosl() leads to implementation-defined result.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (error) Invalid acos() argument nr 1. The value is -1.1 but the valid values are '-1.0:1.0'.\n"
+                      "[test.cpp:4]: (error) Invalid acosf() argument nr 1. The value is -1.1 but the valid values are '-1.0:1.0'.\n"
+                      "[test.cpp:5]: (error) Invalid acosl() argument nr 1. The value is -1.1 but the valid values are '-1.0:1.0'.\n", errout.str());
     }
 
     void mathfunctionCall_asin() {
@@ -661,9 +901,9 @@ private:
               "    std::cout <<  asinf(1.1) << std::endl;\n"
               "    std::cout <<  asinl(1.1) << std::endl;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value 1.1 to asin() leads to implementation-defined result.\n"
-                      "[test.cpp:4]: (warning) Passing value 1.1 to asinf() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing value 1.1 to asinl() leads to implementation-defined result.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (error) Invalid asin() argument nr 1. The value is 1.1 but the valid values are '-1.0:1.0'.\n"
+                      "[test.cpp:4]: (error) Invalid asinf() argument nr 1. The value is 1.1 but the valid values are '-1.0:1.0'.\n"
+                      "[test.cpp:5]: (error) Invalid asinl() argument nr 1. The value is 1.1 but the valid values are '-1.0:1.0'.\n", errout.str());
 
         check("void foo()\n"
               "{\n"
@@ -671,9 +911,9 @@ private:
               "    std::cout <<  asinf(-1.1) << std::endl;\n"
               "    std::cout <<  asinl(-1.1) << std::endl;\n"
               "}");
-        ASSERT_EQUALS("[test.cpp:3]: (warning) Passing value -1.1 to asin() leads to implementation-defined result.\n"
-                      "[test.cpp:4]: (warning) Passing value -1.1 to asinf() leads to implementation-defined result.\n"
-                      "[test.cpp:5]: (warning) Passing value -1.1 to asinl() leads to implementation-defined result.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:3]: (error) Invalid asin() argument nr 1. The value is -1.1 but the valid values are '-1.0:1.0'.\n"
+                      "[test.cpp:4]: (error) Invalid asinf() argument nr 1. The value is -1.1 but the valid values are '-1.0:1.0'.\n"
+                      "[test.cpp:5]: (error) Invalid asinl() argument nr 1. The value is -1.1 but the valid values are '-1.0:1.0'.\n", errout.str());
     }
 
     void mathfunctionCall_pow() {
@@ -827,7 +1067,13 @@ private:
         check("void foo() {\n"
               "  foo::mystrcmp(a, b);\n"
               "}", "test.cpp", &settings2);
-        ASSERT_EQUALS("[test.cpp:2]: (warning) Return value of function mystrcmp() is not used.\n", errout.str());
+        ASSERT_EQUALS("[test.cpp:2]: (warning) Return value of function foo::mystrcmp() is not used.\n", errout.str());
+
+        check("void f() {\n"
+              "  foo x;\n"
+              "  x.mystrcmp(a, b);\n"
+              "}", "test.cpp", &settings2);
+        ASSERT_EQUALS("[test.cpp:3]: (warning) Return value of function x.mystrcmp() is not used.\n", errout.str());
 
         check("bool mystrcmp(char* a, char* b);\n" // cppcheck sees a custom strcmp definition, but it returns a value. Assume it is the one specified in the library.
               "void foo() {\n"
@@ -894,6 +1140,150 @@ private:
               "   void * res{malloc(size)};\n"
               "}");
         ASSERT_EQUALS("", errout.str());
+
+        // #7447
+        check("void foo() {\n"
+              "   int x{mystrcmp(a,b)};\n"
+              "}", "test.cpp", &settings2);
+        ASSERT_EQUALS("", errout.str());
+
+        // #7905
+        check("void foo() {\n"
+              "   int x({mystrcmp(a,b)});\n"
+              "}", "test.cpp", &settings2);
+        ASSERT_EQUALS("", errout.str());
+
+        // #7979 - code is not well configured
+        check("void foo() {\n"
+              "  DEBUG(x(); mystrcmp(a,b););\n"
+              "}", "test.cpp", &settings2);
+        ASSERT_EQUALS("", errout.str());
+
+        check("void foo() {\n" // don't crash
+              "  DEBUG(123)(mystrcmp(a,b))(fd);\n"
+              "}", "test.c", &settings2);
+        check("struct teststruct {\n"
+              "    int testfunc1() __attribute__ ((warn_unused_result)) { return 1; }\n"
+              "    [[nodiscard]] int testfunc2() { return 1; }\n"
+              "    void foo() { testfunc1(); testfunc2(); }\n"
+              "};\n"
+              "int main() {\n"
+              "    teststruct TestStruct1;\n"
+              "    TestStruct1.testfunc1();\n"
+              "    TestStruct1.testfunc2();\n"
+              "}", "test.cpp", &settings2);
+        ASSERT_EQUALS("[test.cpp:4]: (warning) Return value of function testfunc1() is not used.\n"
+                      "[test.cpp:4]: (warning) Return value of function testfunc2() is not used.\n"
+                      "[test.cpp:8]: (warning) Return value of function TestStruct1.testfunc1() is not used.\n"
+                      "[test.cpp:9]: (warning) Return value of function TestStruct1.testfunc2() is not used.\n", errout.str());
+
+        // #9006
+        check("template <typename... a> uint8_t b(std::tuple<uint8_t> d) {\n"
+              "  std::tuple<a...> c{std::move(d)};\n"
+              "  return std::get<0>(c);\n"
+              "}\n");
+        ASSERT_EQUALS("", errout.str());
+
+        check("struct A { int x; };\n"
+              "template <class... Ts>\n"
+              "A f(int x, Ts... xs) {\n"
+              "    return {std::move(x), static_cast<int>(xs)...};\n"
+              "}\n"
+              "A g() { return f(1); }\n");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void memsetZeroBytes() {
+        check("void f() {\n"
+              "    memset(p, 10, 0x0);\n"
+              "}\n");
+        ASSERT_EQUALS("[test.cpp:2]: (warning) memset() called to fill 0 bytes.\n", errout.str());
+
+        check("void f() {\n"
+              "    memset(p, sizeof(p), 0);\n"
+              "}\n");
+        ASSERT_EQUALS("[test.cpp:2]: (warning) memset() called to fill 0 bytes.\n", errout.str());
+
+        check("void f() {\n"
+              "    memset(p, sizeof(p), i);\n"
+              "}\n");
+        ASSERT_EQUALS("", errout.str());
+
+        // #6269 false positives in case of overloaded standard library functions
+        check("class c {\n"
+              "  void memset( int i );\n"
+              "  void f( void )   {\n"
+              "     memset( 0 );\n"
+              "  }\n"
+              "};");
+        ASSERT_EQUALS("", errout.str());
+
+        // #7285
+        check("void f() {\n"
+              "    memset(&tm, sizeof(tm), 0);\n"
+              "}\n");
+        ASSERT_EQUALS("[test.cpp:2]: (warning) memset() called to fill 0 bytes.\n", errout.str());
+
+    }
+
+    void memsetInvalid2ndParam() {
+        check("void f() {\n"
+              "    int* is = new int[10];\n"
+              "    memset(is, 1.0f, 40);\n"
+              "    int* is2 = new int[10];\n"
+              "    memset(is2, 0.1f, 40);\n"
+              "}\n");
+        ASSERT_EQUALS("[test.cpp:3]: (portability) The 2nd memset() argument '1.0f' is a float, its representation is implementation defined.\n"
+                      "[test.cpp:5]: (portability) The 2nd memset() argument '0.1f' is a float, its representation is implementation defined.\n", errout.str());
+
+        check("void f() {\n"
+              "    int* is = new int[10];\n"
+              "    float g = computeG();\n"
+              "    memset(is, g, 40);\n"
+              "}\n");
+        ASSERT_EQUALS("[test.cpp:4]: (portability) The 2nd memset() argument 'g' is a float, its representation is implementation defined.\n", errout.str());
+
+        check("void f() {\n"
+              "    int* is = new int[10];\n"
+              "    memset(is, 0.0f, 40);\n"
+              "}\n");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f() {\n" // FP
+              "    float x = 2.3f;\n"
+              "    memset(a, (x?64:0), 40);\n"
+              "}\n");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f() {\n"
+              "    short ss[] = {1, 2};\n"
+              "    memset(ss, 256, 4);\n"
+              "    short ss2[2];\n"
+              "    memset(ss2, -129, 4);\n"
+              "}\n");
+        ASSERT_EQUALS("[test.cpp:3]: (warning) The 2nd memset() argument '256' doesn't fit into an 'unsigned char'.\n"
+                      "[test.cpp:5]: (warning) The 2nd memset() argument '-129' doesn't fit into an 'unsigned char'.\n", errout.str());
+
+        check("void f() {\n"
+              "    int is[10];\n"
+              "    memset(is, 0xEE, 40);\n"
+              "    unsigned char* cs = malloc(256);\n"
+              "    memset(cs, -1, 256);\n"
+              "    short* ss[30];\n"
+              "    memset(ss, -128, 60);\n"
+              "    char cs2[30];\n"
+              "    memset(cs2, 255, 30);\n"
+              "    char cs3[30];\n"
+              "    memset(cs3, 0, 30);\n"
+              "}\n");
+        ASSERT_EQUALS("", errout.str());
+
+        check("void f() {\n"
+              "    int is[10];\n"
+              "    const int i = g();\n"
+              "    memset(is, 1.0f + i, 40);\n"
+              "}\n");
+        ASSERT_EQUALS("[test.cpp:4]: (portability) The 2nd memset() argument '1.0f+i' is a float, its representation is implementation defined.\n", errout.str());
     }
 };
 

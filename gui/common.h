@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,11 +19,14 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include <QMap>
 #include <QString>
 
 /// @addtogroup GUI
 /// @{
 
+#define CLANG_ANALYZER   "clang-analyzer"
+#define CLANG_TIDY       "clang-tidy"
 
 /**
 * QSetting value names
@@ -56,12 +59,8 @@
 #define SETTINGS_SHOW_PORTABILITY       "Show portability"
 
 // Standards support
-#define SETTINGS_STD_CPP03              "Platform CPP03"
-#define SETTINGS_STD_CPP11              "Platform CPP11"
-#define SETTINGS_STD_C89                "Platform C89"
-#define SETTINGS_STD_C99                "Platform C99"
-#define SETTINGS_STD_C11                "Platform C11"
-#define SETTINGS_STD_POSIX              "Platform Posix"
+#define SETTINGS_STD_CPP                "Standard CPP"
+#define SETTINGS_STD_C                  "Standard C"
 
 // Language enforcement
 #define SETTINGS_ENFORCED_LANGUAGE      "Enforced language"
@@ -80,11 +79,16 @@
 #define SETTINGS_APPLICATION_DEFAULT    "Default Application"
 #define SETTINGS_LANGUAGE               "Application language"
 #define SETTINGS_GLOBAL_INCLUDE_PATHS   "Global include paths"
+#define SETTINGS_PYTHON_PATH            "Python path"
+#define SETTINGS_MISRA_FILE             "MISRA C 2012 file"
+#define SETTINGS_CLANG_PATH             "Clang path"
+#define SETTINGS_VS_INCLUDE_PATHS       "VS include paths"
 #define SETTINGS_INLINE_SUPPRESSIONS    "Inline suppressions"
 #define SETTINGS_INCONCLUSIVE_ERRORS    "Inconclusive errors"
 #define SETTINGS_MRU_PROJECTS           "MRU Projects"
 #define SETTINGS_SHOW_ERROR_ID          "Show error Id"
 #define SETTINGS_SHOW_STATISTICS        "Show statistics"
+#define SETTINGS_OPEN_PROJECT           "Open Project"
 
 // The maximum value for the progress bar
 #define PROGRESS_MAX                    1024.0
@@ -98,15 +102,16 @@
 #define SETTINGS_LAST_INCLUDE_PATH      "Last include path"
 #define SETTINGS_LAST_APP_PATH          "Last application path"
 
+#define SETTINGS_LAST_ANALYZE_FILES_FILTER  "Last analyze files filter"
 
 /**
  * @brief Obtains the path of specified type
  * Returns the path of specified type if not empty. Otherwise returns last check
  * path if valid or user's home directory.
  * @param type Type of path to obtain
- * @return Best path fo provided type
+ * @return Best path for provided type
  */
-QString GetPath(const QString &type);
+QString getPath(const QString &type);
 
 /**
  * @brief Stores last used path of specified type
@@ -114,7 +119,33 @@ QString GetPath(const QString &type);
  * @param type Type of the path to store
  * @param value Path to store
  */
-void SetPath(const QString &type, const QString &value);
+void setPath(const QString &type, const QString &value);
+
+/**
+ * @brief Creates a string suitable for passing as the filter argument to
+ * methods like QFileDialog::getOpenFileName.
+ * @param filters A map of filter descriptions to the associated file name
+ * patterns.
+ * @param addAllSupported If set to true (the default), the function will
+ * include a filter entry containing all the file name patterns found in
+ * \p filters. This entry will be the first in the resulting filter string.
+ * @param addAll If set to true (the default), the function will
+ * include a filter entry displaying all files. This entry will be placed
+ * after the entry for \p addAllSupported files.
+ *
+ * Example usage:
+ *
+ * @code
+ * QMap<QString,QString> filters;
+ * filters[tr("Supported images")] = "*.bmp *.jpg *.png";
+ * filters[tr("Plain text")] = "*.txt";
+ *
+ * const QString filterString = toFilterString(filters);
+ *
+ * // filterString contains "All supported files (*.txt *.bmp *.jpg *.png);;All files (*.*);;Plain text (*.txt);;Supported images (*.bmp *.jpg *.png)"
+ * @endcode
+ */
+QString toFilterString(const QMap<QString,QString>& filters, bool addAllSupported=true, bool addAll=true);
 
 /// @}
 #endif

@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,9 +20,12 @@
 #define STATSDIALOG_H
 
 #include <QDialog>
+#ifdef HAVE_QCHART
+#include <QtCharts>
+#endif
 #include "ui_stats.h"
 
-class Project;
+class ProjectFile;
 class CheckStatistics;
 
 /// @addtogroup GUI
@@ -35,12 +38,12 @@ class CheckStatistics;
 class StatsDialog : public QDialog {
     Q_OBJECT
 public:
-    explicit StatsDialog(QWidget *parent = 0);
+    explicit StatsDialog(QWidget *parent = nullptr);
 
     /**
     * @brief Sets the project to extract statistics from
     */
-    void setProject(const Project& project);
+    void setProject(const ProjectFile *projectFile);
 
     /**
     * @brief Sets the string to display beside "Path Selected:"
@@ -64,10 +67,14 @@ public:
 
 private slots:
     void copyToClipboard();
-
+    void pdfExport();
+#ifdef HAVE_QCHART
+    QChartView *createChart(const QString &statsFile, const QString &tool);
+    QLineSeries *numberOfReports(const QString &fileName, const QString &severity) const;
+#endif
 private:
     Ui::StatsDialog mUI;
-    CheckStatistics *mStatistics;
+    const CheckStatistics *mStatistics;
 };
 
 /// @}

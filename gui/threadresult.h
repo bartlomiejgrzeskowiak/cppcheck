@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2018 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,35 +45,36 @@ public:
     * @brief Get next unprocessed file
     * @return File path
     */
-    QString GetNextFile();
+    QString getNextFile();
 
-    ImportProject::FileSettings GetNextFileSettings();
+    ImportProject::FileSettings getNextFileSettings();
 
     /**
     * @brief Set list of files to check
     * @param files List of files to check
     */
-    void SetFiles(const QStringList &files);
+    void setFiles(const QStringList &files);
 
-    void SetProject(const ImportProject &prj);
+    void setProject(const ImportProject &prj);
 
     /**
     * @brief Clear files to check
     *
     */
-    void ClearFiles();
+    void clearFiles();
 
     /**
     * @brief Get the number of files to check
     *
     */
-    int GetFileCount() const;
+    int getFileCount() const;
 
     /**
     * ErrorLogger methods
     */
-    void reportOut(const std::string &outmsg);
-    void reportErr(const ErrorLogger::ErrorMessage &msg);
+    void reportOut(const std::string &outmsg) override;
+    void reportErr(const ErrorLogger::ErrorMessage &msg) override;
+    void reportVerification(const std::string &/*str*/) override {}
 
 public slots:
 
@@ -81,35 +82,35 @@ public slots:
     * @brief Slot threads use to signal this class that a specific file is checked
     * @param file File that is checked
     */
-    void FileChecked(const QString &file);
+    void fileChecked(const QString &file);
 signals:
     /**
     * @brief Progress signal
     * @param value Current progress
     * @param description Description of the current stage
     */
-    void Progress(int value, const QString& description);
+    void progress(int value, const QString& description);
 
     /**
     * @brief Signal of a new error
     *
     * @param item Error data
     */
-    void Error(const ErrorItem &item);
+    void error(const ErrorItem &item);
 
     /**
     * @brief Signal of a new log message
     *
     * @param logline Log line
     */
-    void Log(const QString &logline);
+    void log(const QString &logline);
 
     /**
     * @brief Signal of a debug error
     *
     * @param item Error data
     */
-    void DebugError(const ErrorItem &item);
+    void debugError(const ErrorItem &item);
 
 protected:
 

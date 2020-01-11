@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,13 +21,18 @@
 #define checkunusedvarH
 //---------------------------------------------------------------------------
 
-#include "config.h"
 #include "check.h"
+#include "config.h"
 
 #include <map>
+#include <string>
 
-class Type;
+class ErrorLogger;
 class Scope;
+class Settings;
+class Token;
+class Tokenizer;
+class Type;
 class Variables;
 
 /// @addtogroup Checks
@@ -48,7 +53,7 @@ public:
     }
 
     /** @brief Run checks against the normal token list */
-    void runChecks(const Tokenizer *tokenizer, const Settings *settings, ErrorLogger *errorLogger) {
+    void runChecks(const Tokenizer *tokenizer, const Settings *settings, ErrorLogger *errorLogger) OVERRIDE {
         CheckUnusedVar checkUnusedVar(tokenizer, settings, errorLogger);
 
         // Coding style checks
@@ -56,15 +61,8 @@ public:
         checkUnusedVar.checkFunctionVariableUsage();
     }
 
-    /** @brief Run checks against the simplified token list */
-    void runSimplifiedChecks(const Tokenizer *tokenizer, const Settings *settings, ErrorLogger *errorLogger) {
-        (void)tokenizer;
-        (void)settings;
-        (void)errorLogger;
-    }
-
     /** @brief %Check for unused function variables */
-    void checkFunctionVariableUsage_iterateScopes(const Scope* const scope, Variables& variables, bool insideLoop);
+    void checkFunctionVariableUsage_iterateScopes(const Scope* const scope, Variables& variables);
     void checkFunctionVariableUsage();
 
     /** @brief %Check that all struct members are used */
@@ -78,16 +76,16 @@ private:
     void unusedStructMemberError(const Token *tok, const std::string &structname, const std::string &varname, bool isUnion = false);
     void unusedVariableError(const Token *tok, const std::string &varname);
     void allocatedButUnusedVariableError(const Token *tok, const std::string &varname);
-    void unreadVariableError(const Token *tok, const std::string &varname);
+    void unreadVariableError(const Token *tok, const std::string &varname, bool modified);
     void unassignedVariableError(const Token *tok, const std::string &varname);
 
-    void getErrorMessages(ErrorLogger *errorLogger, const Settings *settings) const {
+    void getErrorMessages(ErrorLogger *errorLogger, const Settings *settings) const OVERRIDE {
         CheckUnusedVar c(nullptr, settings, errorLogger);
 
         // style/warning
         c.unusedVariableError(nullptr, "varname");
         c.allocatedButUnusedVariableError(nullptr, "varname");
-        c.unreadVariableError(nullptr, "varname");
+        c.unreadVariableError(nullptr, "varname", false);
         c.unassignedVariableError(nullptr, "varname");
         c.unusedStructMemberError(nullptr, "structname", "variable");
     }
@@ -96,20 +94,20 @@ private:
         return "UnusedVar";
     }
 
-    std::string classInfo() const {
+    std::string classInfo() const OVERRIDE {
         return "UnusedVar checks\n"
 
                // style
                "- unused variable\n"
                "- allocated but unused variable\n"
-               "- unred variable\n"
+               "- unread variable\n"
                "- unassigned variable\n"
                "- unused struct member\n";
     }
 
-    std::map<const Type *,bool> isRecordTypeWithoutSideEffectsMap;
+    std::map<const Type *,bool> mIsRecordTypeWithoutSideEffectsMap;
 
-    std::map<const Type *,bool> isEmptyTypeMap;
+    std::map<const Type *,bool> mIsEmptyTypeMap;
 
 };
 /// @}

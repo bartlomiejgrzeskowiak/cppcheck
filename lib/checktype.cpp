@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,9 +19,18 @@
 
 //---------------------------------------------------------------------------
 #include "checktype.h"
-#include "mathlib.h"
-#include "symboldatabase.h"
 
+#include "errorlogger.h"
+#include "mathlib.h"
+#include "platform.h"
+#include "settings.h"
+#include "symboldatabase.h"
+#include "token.h"
+#include "tokenize.h"
+
+#include <cstddef>
+#include <list>
+#include <ostream>
 #include <stack>
 //---------------------------------------------------------------------------
 
@@ -37,72 +46,108 @@ namespace {
 
 // CWE ids used:
 static const struct CWE CWE195(195U);   // Signed to Unsigned Conversion Error
+static const struct CWE CWE197(197U);   // Numeric Truncation Error
 static const struct CWE CWE758(758U);   // Reliance on Undefined, Unspecified, or Implementation-Defined Behavior
 static const struct CWE CWE190(190U);   // Integer Overflow or Wraparound
 
 
 void CheckType::checkTooBigBitwiseShift()
 {
-    const bool printWarnings = _settings->isEnabled("warning");
-    const bool printInconclusive = _settings->inconclusive;
-
     // unknown sizeof(int) => can't run this checker
-    if (_settings->platformType == Settings::Unspecified)
+    if (mSettings->platformType == Settings::Unspecified)
         return;
 
-    const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
-    const std::size_t functions = symbolDatabase->functionScopes.size();
-    for (std::size_t i = 0; i < functions; ++i) {
-        const Scope * scope = symbolDatabase->functionScopes[i];
-        for (const Token* tok = scope->classStart; tok != scope->classEnd; tok = tok->next()) {
-            // C++ and macro: OUT(x<<y)
-            if (_tokenizer->isCPP() && Token::Match(tok, "[;{}] %name% (") && Token::simpleMatch(tok->linkAt(2), ") ;") && tok->next()->isUpperCaseName() && !tok->next()->function())
-                tok = tok->linkAt(2);
+    for (const Token *tok = mTokenizer->tokens(); tok; tok = tok->next()) {
+        // C++ and macro: OUT(x<<y)
+        if (mTokenizer->isCPP() && Token::Match(tok, "[;{}] %name% (") && Token::simpleMatch(tok->linkAt(2), ") ;") && tok->next()->isUpperCaseName() && !tok->next()->function())
+            tok = tok->linkAt(2);
 
-            if (!tok->astOperand1() || !tok->astOperand2())
-                continue;
+        if (!tok->astOperand1() || !tok->astOperand2())
+            continue;
 
-            if (!Token::Match(tok, "<<|>>|<<=|>>="))
-                continue;
+        if (!Token::Match(tok, "<<|>>|<<=|>>="))
+            continue;
 
-            // get number of bits of lhs
-            const ValueType *lhstype = tok->astOperand1()->valueType();
-            if (!lhstype || !lhstype->isIntegral() || lhstype->pointer >= 1U)
-                continue;
-            int lhsbits = 0;
-            if (lhstype->type <= ValueType::Type::INT)
-                lhsbits = _settings->int_bit;
-            else if (lhstype->type == ValueType::Type::LONG)
-                lhsbits = _settings->long_bit;
-            else if (lhstype->type == ValueType::Type::LONGLONG)
-                lhsbits = _settings->long_long_bit;
-            else
-                continue;
+        // get number of bits of lhs
+        const ValueType * const lhstype = tok->astOperand1()->valueType();
+        if (!lhstype || !lhstype->isIntegral() || lhstype->pointer >= 1)
+            continue;
+        // C11 Standard, section 6.5.7 Bitwise shift operators, states:
+        //   The integer promotions are performed on each of the operands.
+        //   The type of the result is that of the promoted left operand.
+        int lhsbits;
+        if ((lhstype->type == ValueType::Type::CHAR) ||
+            (lhstype->type == ValueType::Type::SHORT) ||
+            (lhstype->type == ValueType::Type::WCHAR_T) ||
+            (lhstype->type == ValueType::Type::BOOL) ||
+            (lhstype->type == ValueType::Type::INT))
+            lhsbits = mSettings->int_bit;
+        else if (lhstype->type == ValueType::Type::LONG)
+            lhsbits = mSettings->long_bit;
+        else if (lhstype->type == ValueType::Type::LONGLONG)
+            lhsbits = mSettings->long_long_bit;
+        else
+            continue;
 
-            // Get biggest rhs value. preferably a value which doesn't have 'condition'.
-            const ValueFlow::Value *value = tok->astOperand2()->getValueGE(lhsbits, _settings);
-            if (!value)
-                continue;
-            if (value->condition && !printWarnings)
-                continue;
-            if (value->inconclusive && !printInconclusive)
-                continue;
+        // Get biggest rhs value. preferably a value which doesn't have 'condition'.
+        const ValueFlow::Value * value = tok->astOperand2()->getValueGE(lhsbits, mSettings);
+        if (value && mSettings->isEnabled(value, false))
             tooBigBitwiseShiftError(tok, lhsbits, *value);
+        else if (lhstype->sign == ValueType::Sign::SIGNED) {
+            value = tok->astOperand2()->getValueGE(lhsbits-1, mSettings);
+            if (value && mSettings->isEnabled(value, false))
+                tooBigSignedBitwiseShiftError(tok, lhsbits, *value);
         }
     }
 }
 
 void CheckType::tooBigBitwiseShiftError(const Token *tok, int lhsbits, const ValueFlow::Value &rhsbits)
 {
-    std::list<const Token*> callstack;
-    callstack.push_back(tok);
-    if (rhsbits.condition)
-        callstack.push_back(rhsbits.condition);
+    const char id[] = "shiftTooManyBits";
+
+    if (!tok) {
+        reportError(tok, Severity::error, id, "Shifting 32-bit value by 40 bits is undefined behaviour", CWE758, false);
+        return;
+    }
+
+    const ErrorPath errorPath = getErrorPath(tok, &rhsbits, "Shift");
+
     std::ostringstream errmsg;
     errmsg << "Shifting " << lhsbits << "-bit value by " << rhsbits.intvalue << " bits is undefined behaviour";
     if (rhsbits.condition)
         errmsg << ". See condition at line " << rhsbits.condition->linenr() << ".";
-    reportError(callstack, rhsbits.condition ? Severity::warning : Severity::error, "shiftTooManyBits", errmsg.str(), CWE758, rhsbits.inconclusive);
+
+    reportError(errorPath, rhsbits.errorSeverity() ? Severity::error : Severity::warning, id, errmsg.str(), CWE758, rhsbits.isInconclusive());
+}
+
+void CheckType::tooBigSignedBitwiseShiftError(const Token *tok, int lhsbits, const ValueFlow::Value &rhsbits)
+{
+    const char id[] = "shiftTooManyBitsSigned";
+
+    const bool cpp14 = mSettings->standards.cpp >= Standards::CPP14;
+
+    std::string behaviour = "undefined";
+    if (cpp14)
+        behaviour = "implementation-defined";
+    if (!tok) {
+        reportError(tok, Severity::error, id, "Shifting signed 32-bit value by 31 bits is " + behaviour + " behaviour", CWE758, false);
+        return;
+    }
+
+    const ErrorPath errorPath = getErrorPath(tok, &rhsbits, "Shift");
+
+    std::ostringstream errmsg;
+    errmsg << "Shifting signed " << lhsbits << "-bit value by " << rhsbits.intvalue << " bits is " + behaviour + " behaviour";
+    if (rhsbits.condition)
+        errmsg << ". See condition at line " << rhsbits.condition->linenr() << ".";
+
+    Severity::SeverityType severity = rhsbits.errorSeverity() ? Severity::error : Severity::warning;
+    if (cpp14)
+        severity = Severity::portability;
+
+    if ((severity == Severity::portability) && !mSettings->isEnabled(Settings::PORTABILITY))
+        return;
+    reportError(errorPath, severity, id, errmsg.str(), CWE758, rhsbits.isInconclusive());
 }
 
 //---------------------------------------------------------------------------
@@ -112,32 +157,46 @@ void CheckType::tooBigBitwiseShiftError(const Token *tok, int lhsbits, const Val
 void CheckType::checkIntegerOverflow()
 {
     // unknown sizeof(int) => can't run this checker
-    if (_settings->platformType == Settings::Unspecified)
+    if (mSettings->platformType == Settings::Unspecified || mSettings->int_bit >= MathLib::bigint_bits)
         return;
 
-    // max int value according to platform settings.
-    const MathLib::bigint maxint = (1LL << (_settings->int_bit - 1)) - 1;
+    for (const Token *tok = mTokenizer->tokens(); tok; tok = tok->next()) {
+        if (!tok->isArithmeticalOp())
+            continue;
 
-    const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
-    const std::size_t functions = symbolDatabase->functionScopes.size();
-    for (std::size_t i = 0; i < functions; ++i) {
-        const Scope * scope = symbolDatabase->functionScopes[i];
-        for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
-            if (!tok->isArithmeticalOp())
-                continue;
+        // is result signed integer?
+        const ValueType *vt = tok->valueType();
+        if (!vt || !vt->isIntegral() || vt->sign != ValueType::Sign::SIGNED)
+            continue;
 
-            // is result signed integer?
-            const ValueType *vt = tok->valueType();
-            if (!vt || vt->type != ValueType::Type::INT || vt->sign != ValueType::Sign::SIGNED)
-                continue;
+        unsigned int bits;
+        if (vt->type == ValueType::Type::INT)
+            bits = mSettings->int_bit;
+        else if (vt->type == ValueType::Type::LONG)
+            bits = mSettings->long_bit;
+        else if (vt->type == ValueType::Type::LONGLONG)
+            bits = mSettings->long_long_bit;
+        else
+            continue;
 
-            // is there a overflow result value
-            const ValueFlow::Value *value = tok->getValueGE(maxint + 1, _settings);
-            if (!value)
-                value = tok->getValueLE(-maxint - 2, _settings);
-            if (value)
-                integerOverflowError(tok, *value);
-        }
+        if (bits >= MathLib::bigint_bits)
+            continue;
+
+        // max value according to platform settings.
+        const MathLib::bigint maxvalue = (((MathLib::bigint)1) << (bits - 1)) - 1;
+
+        // is there a overflow result value
+        const ValueFlow::Value *value = tok->getValueGE(maxvalue + 1, mSettings);
+        if (!value)
+            value = tok->getValueLE(-maxvalue - 2, mSettings);
+        if (!value || !mSettings->isEnabled(value,false))
+            continue;
+
+        // For left shift, it's common practice to shift into the sign bit
+        if (tok->str() == "<<" && value->intvalue > 0 && value->intvalue < (((MathLib::bigint)1) << bits))
+            continue;
+
+        integerOverflowError(tok, *value);
     }
 }
 
@@ -152,12 +211,15 @@ void CheckType::integerOverflowError(const Token *tok, const ValueFlow::Value &v
     else
         msg = "Signed integer overflow for expression '" + expr + "'.";
 
-    reportError(tok,
-                value.condition ? Severity::warning : Severity::error,
-                "integerOverflow",
+    if (value.safe)
+        msg = "Safe checks: " + msg;
+
+    reportError(getErrorPath(tok, &value, "Integer overflow"),
+                value.errorSeverity() ? Severity::error : Severity::warning,
+                getMessageId(value, "integerOverflow").c_str(),
                 msg,
                 CWE190,
-                value.inconclusive);
+                value.isInconclusive());
 }
 
 //---------------------------------------------------------------------------
@@ -166,49 +228,58 @@ void CheckType::integerOverflowError(const Token *tok, const ValueFlow::Value &v
 
 void CheckType::checkSignConversion()
 {
-    if (!_settings->isEnabled("warning"))
+    if (!mSettings->isEnabled(Settings::WARNING))
         return;
 
-    const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
-    const std::size_t functions = symbolDatabase->functionScopes.size();
-    for (std::size_t i = 0; i < functions; ++i) {
-        const Scope * scope = symbolDatabase->functionScopes[i];
-        for (const Token* tok = scope->classStart->next(); tok != scope->classEnd; tok = tok->next()) {
-            if (!tok->isArithmeticalOp() || Token::Match(tok,"+|-"))
-                continue;
+    for (const Token *tok = mTokenizer->tokens(); tok; tok = tok->next()) {
+        if (!tok->isArithmeticalOp() || Token::Match(tok,"+|-"))
+            continue;
 
-            // Is result unsigned?
-            if (!(tok->valueType() && tok->valueType()->sign == ValueType::Sign::UNSIGNED))
-                continue;
+        // Is result unsigned?
+        if (!(tok->valueType() && tok->valueType()->sign == ValueType::Sign::UNSIGNED))
+            continue;
 
-            // Check if an operand can be negative..
-            std::stack<const Token *> tokens;
-            tokens.push(tok->astOperand1());
-            tokens.push(tok->astOperand2());
-            while (!tokens.empty()) {
-                const Token *tok1 = tokens.top();
-                tokens.pop();
-                if (!tok1)
-                    continue;
-                if (!tok1->getValueLE(-1,_settings))
-                    continue;
-                if (tok1->valueType() && tok1->valueType()->sign != ValueType::Sign::UNSIGNED)
-                    signConversionError(tok1, tok1->isNumber());
-            }
+        // Check if an operand can be negative..
+        std::stack<const Token *> tokens;
+        tokens.push(tok->astOperand1());
+        tokens.push(tok->astOperand2());
+        while (!tokens.empty()) {
+            const Token *tok1 = tokens.top();
+            tokens.pop();
+            if (!tok1)
+                continue;
+            const ValueFlow::Value *negativeValue = tok1->getValueLE(-1,mSettings);
+            if (!negativeValue)
+                continue;
+            if (tok1->valueType() && tok1->valueType()->sign != ValueType::Sign::UNSIGNED)
+                signConversionError(tok1, negativeValue, tok1->isNumber());
         }
     }
 }
 
-void CheckType::signConversionError(const Token *tok, const bool constvalue)
+void CheckType::signConversionError(const Token *tok, const ValueFlow::Value *negativeValue, const bool constvalue)
 {
-    const std::string varname(tok ? tok->str() : "var");
+    const std::string expr(tok ? tok->expressionString() : "var");
 
-    reportError(tok,
-                Severity::warning,
-                "signConversion",
-                (constvalue) ?
-                "Suspicious code: sign conversion of " + varname + " in calculation because '" + varname + "' has a negative value" :
-                "Suspicious code: sign conversion of " + varname + " in calculation, even though " + varname + " can have a negative value", CWE195, false);
+    std::ostringstream msg;
+    if (tok && tok->isName())
+        msg << "$symbol:" << expr << "\n";
+    if (constvalue)
+        msg << "Expression '" << expr << "' has a negative value. That is converted to an unsigned value and used in an unsigned calculation.";
+    else
+        msg << "Expression '" << expr << "' can have a negative value. That is converted to an unsigned value and used in an unsigned calculation.";
+
+    if (!negativeValue)
+        reportError(tok, Severity::warning, "signConversion", msg.str(), CWE195, false);
+    else {
+        const ErrorPath &errorPath = getErrorPath(tok,negativeValue,"Negative value is converted to an unsigned value");
+        reportError(errorPath,
+                    Severity::warning,
+                    Check::getMessageId(*negativeValue, "signConversion").c_str(),
+                    msg.str(),
+                    CWE195,
+                    negativeValue->isInconclusive());
+    }
 }
 
 
@@ -218,13 +289,19 @@ void CheckType::signConversionError(const Token *tok, const bool constvalue)
 
 void CheckType::checkLongCast()
 {
-    if (!_settings->isEnabled("style"))
+    if (!mSettings->isEnabled(Settings::STYLE))
         return;
 
     // Assignments..
-    for (const Token *tok = _tokenizer->tokens(); tok; tok = tok->next()) {
+    for (const Token *tok = mTokenizer->tokens(); tok; tok = tok->next()) {
         if (tok->str() != "=" || !Token::Match(tok->astOperand2(), "*|<<"))
             continue;
+
+        if (tok->astOperand2()->hasKnownIntValue()) {
+            const ValueFlow::Value &v = tok->astOperand2()->values().front();
+            if (mSettings->isIntValue(v.intvalue))
+                continue;
+        }
 
         const ValueType *lhstype = tok->astOperand1() ? tok->astOperand1()->valueType() : nullptr;
         const ValueType *rhstype = tok->astOperand2()->valueType();
@@ -244,10 +321,8 @@ void CheckType::checkLongCast()
     }
 
     // Return..
-    const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
-    const std::size_t functions = symbolDatabase->functionScopes.size();
-    for (std::size_t i = 0; i < functions; ++i) {
-        const Scope * scope = symbolDatabase->functionScopes[i];
+    const SymbolDatabase *symbolDatabase = mTokenizer->getSymbolDatabase();
+    for (const Scope * scope : symbolDatabase->functionScopes) {
 
         // function must return long data
         const Token * def = scope->classDef;
@@ -264,7 +339,7 @@ void CheckType::checkLongCast()
 
         // return statements
         const Token *ret = nullptr;
-        for (const Token *tok = scope->classStart; tok != scope->classEnd; tok = tok->next()) {
+        for (const Token *tok = scope->bodyStart; tok != scope->bodyEnd; tok = tok->next()) {
             if (tok->str() == "return") {
                 if (Token::Match(tok->astOperand1(), "<<|*")) {
                     const ValueType *type = tok->astOperand1()->valueType();
@@ -290,7 +365,7 @@ void CheckType::longCastAssignError(const Token *tok)
                 Severity::style,
                 "truncLongCastAssignment",
                 "int result is assigned to long variable. If the variable is long to avoid loss of information, then you have loss of information.\n"
-                "int result is assigned to long variable. If the variable is long to avoid loss of information, then there is loss of information. To avoid loss of information you must cast a calculation operand to long, for example 'l = a * b;' => 'l = (long)a * b;'.");
+                "int result is assigned to long variable. If the variable is long to avoid loss of information, then there is loss of information. To avoid loss of information you must cast a calculation operand to long, for example 'l = a * b;' => 'l = (long)a * b;'.", CWE197, false);
 }
 
 void CheckType::longCastReturnError(const Token *tok)
@@ -299,5 +374,92 @@ void CheckType::longCastReturnError(const Token *tok)
                 Severity::style,
                 "truncLongCastReturn",
                 "int result is returned as long value. If the return value is long to avoid loss of information, then you have loss of information.\n"
-                "int result is returned as long value. If the return value is long to avoid loss of information, then there is loss of information. To avoid loss of information you must cast a calculation operand to long, for example 'return a*b;' => 'return (long)a*b'.");
+                "int result is returned as long value. If the return value is long to avoid loss of information, then there is loss of information. To avoid loss of information you must cast a calculation operand to long, for example 'return a*b;' => 'return (long)a*b'.", CWE197, false);
+}
+
+//---------------------------------------------------------------------------
+// Checking for float to integer overflow
+//---------------------------------------------------------------------------
+
+void CheckType::checkFloatToIntegerOverflow()
+{
+    for (const Token *tok = mTokenizer->tokens(); tok; tok = tok->next()) {
+        const ValueType *vtint, *vtfloat;
+        const std::list<ValueFlow::Value> *floatValues;
+
+        // Explicit cast
+        if (Token::Match(tok, "( %name%") && tok->astOperand1() && !tok->astOperand2()) {
+            vtint = tok->valueType();
+            vtfloat = tok->astOperand1()->valueType();
+            floatValues = &tok->astOperand1()->values();
+            checkFloatToIntegerOverflow(tok, vtint, vtfloat, floatValues);
+        }
+
+        // Assignment
+        else if (tok->str() == "=" && tok->astOperand1() && tok->astOperand2()) {
+            vtint = tok->astOperand1()->valueType();
+            vtfloat = tok->astOperand2()->valueType();
+            floatValues = &tok->astOperand2()->values();
+            checkFloatToIntegerOverflow(tok, vtint, vtfloat, floatValues);
+        }
+
+        else if (tok->str() == "return" && tok->astOperand1() && tok->astOperand1()->valueType() && tok->astOperand1()->valueType()->isFloat()) {
+            const Scope *scope = tok->scope();
+            while (scope && scope->type != Scope::ScopeType::eLambda && scope->type != Scope::ScopeType::eFunction)
+                scope = scope->nestedIn;
+            if (scope && scope->type == Scope::ScopeType::eFunction && scope->function && scope->function->retDef) {
+                const ValueType &valueType = ValueType::parseDecl(scope->function->retDef, mSettings);
+                vtfloat = tok->astOperand1()->valueType();
+                floatValues = &tok->astOperand1()->values();
+                checkFloatToIntegerOverflow(tok, &valueType, vtfloat, floatValues);
+            }
+        }
+    }
+}
+
+void CheckType::checkFloatToIntegerOverflow(const Token *tok, const ValueType *vtint, const ValueType *vtfloat, const std::list<ValueFlow::Value> *floatValues)
+{
+    // Conversion of float to integer?
+    if (!vtint || !vtint->isIntegral())
+        return;
+    if (!vtfloat || !vtfloat->isFloat())
+        return;
+
+    for (const ValueFlow::Value &f : *floatValues) {
+        if (f.valueType != ValueFlow::Value::ValueType::FLOAT)
+            continue;
+        if (!mSettings->isEnabled(&f, false))
+            continue;
+        if (f.floatValue > ~0ULL)
+            floatToIntegerOverflowError(tok, f);
+        else if ((-f.floatValue) > (1ULL<<62))
+            floatToIntegerOverflowError(tok, f);
+        else if (mSettings->platformType != Settings::Unspecified) {
+            int bits = 0;
+            if (vtint->type == ValueType::Type::CHAR)
+                bits = mSettings->char_bit;
+            else if (vtint->type == ValueType::Type::SHORT)
+                bits = mSettings->short_bit;
+            else if (vtint->type == ValueType::Type::INT)
+                bits = mSettings->int_bit;
+            else if (vtint->type == ValueType::Type::LONG)
+                bits = mSettings->long_bit;
+            else if (vtint->type == ValueType::Type::LONGLONG)
+                bits = mSettings->long_long_bit;
+            else
+                continue;
+            if (bits < MathLib::bigint_bits && f.floatValue >= (((MathLib::biguint)1) << bits))
+                floatToIntegerOverflowError(tok, f);
+        }
+    }
+}
+
+void CheckType::floatToIntegerOverflowError(const Token *tok, const ValueFlow::Value &value)
+{
+    std::ostringstream errmsg;
+    errmsg << "Undefined behaviour: float (" << value.floatValue << ") to integer conversion overflow.";
+    reportError(getErrorPath(tok, &value, "float to integer conversion"),
+                value.errorSeverity() ? Severity::error : Severity::warning,
+                "floatConversionOverflow",
+                errmsg.str(), CWE190, value.isInconclusive());
 }

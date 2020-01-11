@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2018 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,13 +28,12 @@
 
 #include "settings.h"
 #include "platforms.h"
-#include "ui_main.h"
+#include "ui_mainwindow.h"
 
 class ThreadHandler;
 class TranslationHandler;
 class ScratchPad;
-class LogView;
-class Project;
+class ProjectFile;
 class ErrorItem;
 class QAction;
 
@@ -42,20 +41,22 @@ class QAction;
 /// @{
 
 /**
-* @brief Main window for cppcheck-gui
-*
-*/
+ * @brief Main window for cppcheck-gui
+ *
+ */
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
 
     /**
-    * @brief Maximum number of MRU project items in File-menu.
-    */
+     * @brief Maximum number of MRU project items in File-menu.
+     */
     enum { MaxRecentProjects = 5 };
 
     MainWindow(TranslationHandler* th, QSettings* settings);
+    MainWindow(const MainWindow &) = delete;
     virtual ~MainWindow();
+    MainWindow &operator=(const MainWindow &) = delete;
 
     /**
       * List of checked platforms.
@@ -63,404 +64,311 @@ public:
     Platforms mPlatforms;
 
     /**
-    * @brief Checks given code
-    *
-    * @param code Content of the (virtual) file to be checked
-    * @param filename Name of the (virtual) file to be checked - determines language.
-    */
-    void CheckCode(const QString& code, const QString& filename);
+     * @brief Analyze given code
+     *
+     * @param code Content of the (virtual) file to be analyzed
+     * @param filename Name of the (virtual) file to be analyzed - determines language.
+     */
+    void analyzeCode(const QString& code, const QString& filename);
 
 public slots:
 
-    /**
-    * @brief Slot for check files menu item
-    *
-    */
-    void CheckFiles();
+    /** @brief Slot for analyze files menu item */
+    void analyzeFiles();
+
+    /** @brief Slot to reanalyze all files */
+    void reAnalyzeAll();
+
+    /** @brief Slot to reanalyze with checking library configuration */
+    void checkLibrary();
+
+    /** @brief Slot to check configuration */
+    void checkConfiguration();
 
     /**
-    * @brief Slot to recheck all files
-    *
-    */
-    void ReCheckAll();
+     * @brief Slot to reanalyze selected files
+     * @param selectedFilesList list of selected files
+     */
+    void performSelectedFilesCheck(const QStringList &selectedFilesList);
+
+    /** @brief Slot to reanalyze modified files */
+    void reAnalyzeModified();
+
+    /** @brief Slot to clear all search results */
+    void clearResults();
+
+    /** @brief Slot to open XML report file */
+    void openResults();
 
     /**
-    * @brief Slot to recheck selected files
-    * @param selectedFilesList list of selected files
-    */
-    void PerformSelectedFilesCheck(QStringList selectedFilesList);
+     * @brief Show errors with type "style"
+     * @param checked Should errors be shown (true) or hidden (false)
+     */
+    void showStyle(bool checked);
 
     /**
-    * @brief Slot to recheck modified files
-    *
-    */
-    void ReCheckModified();
+     * @brief Show errors with type "error"
+     * @param checked Should errors be shown (true) or hidden (false)
+     */
+    void showErrors(bool checked);
 
     /**
-    * @brief Slot to clear all search results
-    *
-    */
-    void ClearResults();
+     * @brief Show errors with type "warning"
+     * @param checked Should errors be shown (true) or hidden (false)
+     */
+    void showWarnings(bool checked);
 
     /**
-    * @brief Slot to open XML report file
-    *
-    */
-    void OpenResults();
+     * @brief Show errors with type "portability"
+     * @param checked Should errors be shown (true) or hidden (false)
+     */
+    void showPortability(bool checked);
 
     /**
-    * @brief Show errors with type "style"
-    * @param checked Should errors be shown (true) or hidden (false)
-    */
-    void ShowStyle(bool checked);
+     * @brief Show errors with type "performance"
+     * @param checked Should errors be shown (true) or hidden (false)
+     */
+    void showPerformance(bool checked);
 
     /**
-    * @brief Show errors with type "error"
-    * @param checked Should errors be shown (true) or hidden (false)
-    */
-    void ShowErrors(bool checked);
+     * @brief Show errors with type "information"
+     * @param checked Should errors be shown (true) or hidden (false)
+     */
+    void showInformation(bool checked);
 
-    /**
-    * @brief Show errors with type "warning"
-    * @param checked Should errors be shown (true) or hidden (false)
-    */
-    void ShowWarnings(bool checked);
+    /** @brief Slot to check all "Show errors" menu items */
+    void checkAll();
 
-    /**
-    * @brief Show errors with type "portability"
-    * @param checked Should errors be shown (true) or hidden (false)
-    */
-    void ShowPortability(bool checked);
+    /** @brief Slot to uncheck all "Show errors" menu items */
+    void uncheckAll();
 
-    /**
-    * @brief Show errors with type "performance"
-    * @param checked Should errors be shown (true) or hidden (false)
-    */
-    void ShowPerformance(bool checked);
+    /** @brief Slot for analyze directory menu item */
+    void analyzeDirectory();
 
-    /**
-    * @brief Show errors with type "information"
-    * @param checked Should errors be shown (true) or hidden (false)
-    */
-    void ShowInformation(bool checked);
+    /** @brief Slot to open program's settings dialog */
+    void programSettings();
 
-    /**
-    * @brief Slot to check all "Show errors" menu items
-    */
-    void CheckAll();
+    /** @brief Slot to open program's about dialog */
+    void about();
 
-    /**
-    * @brief Slot to uncheck all "Show errors" menu items
-    */
-    void UncheckAll();
+    /** @brief Slot to to show license text */
+    void showLicense();
 
-    /**
-    * @brief Slot for check directory menu item
-    *
-    */
-    void CheckDirectory();
+    /** @brief Slot to to show authors list */
+    void showAuthors();
 
-    /**
-    * @brief Slot to open program's settings dialog
-    *
-    */
-    void ProgramSettings();
+    /** @brief Slot to save results */
+    void save();
 
-    /**
-    * @brief Slot to open program's about dialog
-    *
-    */
-    void About();
+    /** @brief Slot to create new project file */
+    void newProjectFile();
 
-    /**
-    * @brief Slot to to show license text
-    *
-    */
-    void ShowLicense();
+    /** @brief Slot to open project file and start analyzing contained paths. */
+    void openProjectFile();
 
-    /**
-    * @brief Slot to to show authors list
-    *
-    */
-    void ShowAuthors();
+    /** @brief Slot to show scratchpad. */
+    void showScratchpad();
 
-    /**
-    * @brief Slot to stop processing files
-    *
-    */
-    void Save();
+    /** @brief Slot to close open project file. */
+    void closeProjectFile();
 
-    /**
-    * @brief Slot to create new project file
-    *
-    */
-    void NewProjectFile();
+    /** @brief Slot to edit project file. */
+    void editProjectFile();
 
-    /**
-    * @brief Slot to open project file and start checking contained paths.
-    *
-    */
-    void OpenProjectFile();
+    /** @brief Slot for showing the scan and project statistics. */
+    void showStatistics();
 
-    /**
-    * @brief Slot to open project file and start checking contained paths.
-    *
-    */
-    void ShowScratchpad();
-
-    /**
-    * @brief Slot to close open project file.
-    *
-    */
-    void CloseProjectFile();
-
-    /**
-    * @brief Slot to edit project file.
-    *
-    */
-    void EditProjectFile();
-
-    /**
-    * @brief Slot for showing the log view.
-    *
-    */
-    void ShowLogView();
-
-    /**
-    * @brief Slot for showing the scan and project statistics.
-    *
-    */
-    void ShowStatistics();
-
-    /**
-    * @brief Slot for showing the library editor
-    *
-    */
-    void ShowLibraryEditor();
+    /** @brief Slot for showing the library editor */
+    void showLibraryEditor();
 
 protected slots:
 
-    /**
-    * @brief Slot for checkthread's done signal
-    *
-    */
-    void CheckDone();
+    /** @brief Slot for checkthread's done signal */
+    void analysisDone();
 
-    /**
-    * @brief Lock down UI while checking
-    *
-    */
-    void CheckLockDownUI();
+    /** @brief Lock down UI while analyzing */
+    void checkLockDownUI();
 
-    /**
-    * @brief Slot for enabling save and clear button
-    *
-    */
-    void ResultsAdded();
+    /** @brief Slot for enabling save and clear button */
+    void resultsAdded();
 
-    /**
-    * @brief Slot for showing/hiding standard toolbar
-    */
-    void ToggleMainToolBar();
+    /** @brief Slot for showing/hiding standard toolbar */
+    void toggleMainToolBar();
 
-    /**
-    * @brief Slot for showing/hiding Categories toolbar
-    */
-    void ToggleViewToolBar();
+    /** @brief Slot for showing/hiding Categories toolbar */
+    void toggleViewToolBar();
 
-    /**
-    * @brief Slot for showing/hiding Filter toolbar
-    */
-    void ToggleFilterToolBar();
+    /** @brief Slot for showing/hiding Filter toolbar */
+    void toggleFilterToolBar();
 
-    /**
-    * @brief Slot for updating View-menu before it is shown.
-    */
-    void AboutToShowViewMenu();
+    /** @brief Slot for updating View-menu before it is shown. */
+    void aboutToShowViewMenu();
 
-    /**
-    * @brief Slot when stop checking button is pressed
-    *
-    */
-    void StopChecking();
+    /** @brief Slot when stop analysis button is pressed */
+    void stopAnalysis();
 
-    /**
-    * @brief Open help file contents
-    *
-    */
-    void OpenHelpContents();
+    /** @brief Open help file contents */
+    void openHelpContents();
 
-    /**
-    * @brief Add new line to log.
-    *
-    */
-    void Log(const QString &logline);
+    /** @brief Filters the results in the result list. */
+    void filterResults();
 
-    /**
-    * @brief Handle new debug error.
-    *
-    */
-    void DebugError(const ErrorItem &item);
+    /** @brief Opens recently opened project file. */
+    void openRecentProject();
 
-    /**
-    * @brief Filters the results in the result list.
-    */
-    void FilterResults();
+    /** @brief Selects the platform as analyzed platform. */
+    void selectPlatform();
 
-    /**
-    * @brief Opens recently opened project file.
-    */
-    void OpenRecentProject();
+    /** Some results were tagged */
+    void tagged();
 
-    /**
-    * @brief Selects the platform as checked platform.
-    */
-    void SelectPlatform();
+    /** Suppress error ids */
+    void suppressIds(QStringList ids);
 
 private:
 
-    /**
-    * @brief Rechecks files
-    *
-    */
-    void ReCheck(bool all);
+    /** Get filename for last results */
+    QString getLastResults() const;
+
+    /** @brief Reanalyzes files */
+    void reAnalyze(bool all);
 
     /**
-    * @brief Recheck selected files
-    * @param files list of selected files
-    * @param all true if all files of list, false if modified files of list
-    */
-    void ReCheckSelected(QStringList files, bool all);
+     * @brief Reanalyze selected files
+     * @param files list of selected files
+     */
+    void reAnalyzeSelected(QStringList files);
 
     /**
-      * @brief Check the project.
-      * @param project Pointer to the project to check.
+      * @brief Analyze the project.
+      * @param projectFile Pointer to the project to analyze.
+      * @param checkLibrary Flag to indicate if the library should be checked.
+      * @param checkConfiguration Flag to indicate if the configuration should be checked.
       */
-    void CheckProject(Project *project);
+    void analyzeProject(const ProjectFile *projectFile, const bool checkLibrary = false, const bool checkConfiguration = false);
 
     /**
-    * @brief Set current language
-    * @param code Language code of the language to set (e.g. "en").
-    */
-    void SetLanguage(const QString &code);
+     * @brief Set current language
+     * @param code Language code of the language to set (e.g. "en").
+     */
+    void setLanguage(const QString &code);
 
-    /**
-    * @brief Event coming when application is about to close.
-    */
+    /** @brief Event coming when application is about to close. */
     virtual void closeEvent(QCloseEvent *event);
 
     /**
-    * @brief Helper function to toggle all show error menu items
-    * @param checked Should all errors be shown (true) or hidden (false)
-    */
-    void ToggleAllChecked(bool checked);
+     * @brief Helper function to toggle all show error menu items
+     * @param checked Should all errors be shown (true) or hidden (false)
+     */
+    void toggleAllChecked(bool checked);
+
+    /** @brief Helper function to enable/disable all check,recheck buttons */
+    void enableCheckButtons(bool enable);
+
+    /** @brief Helper function to enable/disable results buttons (clear,save,print) */
+    void enableResultsButtons();
 
     /**
-    * @brief Helper function to enable/disable all check,recheck buttons
-    *
-    */
-    void EnableCheckButtons(bool enable);
+     * @brief Select files/or directory to analyze.
+     * Helper function to open a dialog to ask user to select files or
+     * directory to analyze. Use native dialogs instead of Qt:s own dialogs.
+     *
+     * @param mode Dialog open mode (files or directories)
+     * @return QStringList of files or directories that were selected to analyze
+     */
+    QStringList selectFilesToAnalyze(QFileDialog::FileMode mode);
 
     /**
-    * @brief Select files/or directory to check.
-    * Helper function to open a dialog to ask user to select files or
-    * directory to check. Use native dialogs instead of Qt:s own dialogs.
-    *
-    * @param mode Dialog open mode (files or directories)
-    * @return QStringList of files or directories that were selected to check
-    */
-    QStringList SelectFilesToCheck(QFileDialog::FileMode mode);
+     * @brief Analyze project
+     * @param p imported project
+     * @param checkLibrary Flag to indicate if library should be checked
+     * @param checkConfiguration Flag to indicate if the configuration should be checked.
+     */
+    void doAnalyzeProject(ImportProject p, const bool checkLibrary = false, const bool checkConfiguration = false);
 
     /**
-    * @brief Check project
-    *
-    * @param p imported project
-    */
-    void DoCheckProject(ImportProject p);
+     * @brief Analyze all files specified in parameter files
+     *
+     * @param files List of files and/or directories to analyze
+     * @param checkLibrary Flag to indicate if library should be checked
+     * @param checkConfiguration Flag to indicate if the configuration should be checked.
+     */
+    void doAnalyzeFiles(const QStringList &files, const bool checkLibrary = false, const bool checkConfiguration = false);
 
     /**
-    * @brief Check all files specified in parameter files
-    *
-    * @param files List of files and/or directories to check
-    */
-    void DoCheckFiles(const QStringList &files);
+     * @brief Get our default cppcheck settings and read project file.
+     *
+     * @return Default cppcheck settings
+     */
+    Settings getCppcheckSettings();
+
+    /** @brief Load program settings */
+    void loadSettings();
+
+    /** @brief Save program settings */
+    void saveSettings() const;
 
     /**
-    * @brief Get our default cppcheck settings and read project file.
-    *
-    * @return Default cppcheck settings
-    */
-    Settings GetCppcheckSettings();
+     * @brief Format main window title.
+     * @param text Text added to end of the title.
+     */
+    void formatAndSetTitle(const QString &text = QString());
+
+    /** @brief Show help contents */
+    void openOnlineHelp();
 
     /**
-    * @brief Load program settings
-    *
-    */
-    void LoadSettings();
+     * @brief Enable or disable project file actions.
+     * Project editing and closing actions should be only enabled when project is
+     * open and we are not analyzing files.
+     * @param enable If true then actions are enabled.
+     */
+    void enableProjectActions(bool enable);
 
     /**
-    * @brief Save program settings
-    *
-    */
-    void SaveSettings() const;
+     * @brief Enable or disable project file actions.
+     * Project opening and creating actions should be disabled when analyzing.
+     * @param enable If true then actions are enabled.
+     */
+    void enableProjectOpenActions(bool enable);
 
     /**
-    * @brief Format main window title.
-    * @param text Text added to end of the title.
-    */
-    void FormatAndSetTitle(const QString &text = QString());
+     * @brief Add include directories.
+     * @param includeDirs List of include directories to add.
+     * @param result Settings class where include directories are added.
+     */
+    void addIncludeDirs(const QStringList &includeDirs, Settings &result);
 
     /**
-    * @brief Show help contents
-    */
-    void OpenOnlineHelp();
+     * @brief Handle command line parameters given to GUI.
+     * @param params List of string given to command line.
+     */
+    void handleCLIParams(const QStringList &params);
 
     /**
-    * @brief Enable or disable project file actions.
-    * Project editing and closing actions should be only enabled when project is
-    * open and we are not checking files.
-    * @param enable If true then actions are enabled.
-    */
-    void EnableProjectActions(bool enable);
+     * @brief Load XML file to the GUI.
+     * @param selectedFile Filename (inc. path) of XML file to load.
+     */
+    void loadResults(const QString &selectedFile);
 
     /**
-    * @brief Enable or disable project file actions.
-    * Project opening and creating actions should be disabled when checking.
-    * @param enable If true then actions are enabled.
-    */
-    void EnableProjectOpenActions(bool enable);
+     * @brief Load XML file to the GUI.
+     * @param selectedFile Filename (inc. path) of XML file to load.
+     * @param sourceDirectory Path to the directory that the results were generated for.
+     */
+    void loadResults(const QString &selectedFile, const QString &sourceDirectory);
 
     /**
-    * @brief Add include directories.
-    * @param includeDirs List of include directories to add.
-    * @param result Settings class where include directories are added.
+    * @brief Load last project results to the GUI.
+    * @return Returns true if last results was loaded
     */
-    void AddIncludeDirs(const QStringList &includeDirs, Settings &result);
+    bool loadLastResults();
 
     /**
-    * @brief Handle command line parameters given to GUI.
-    * @param params List of string given to command line.
-    */
-    void HandleCLIParams(const QStringList &params);
-
-    /**
-    * @brief Load XML file to the GUI.
-    * @param file Filename (inc. path) of XML file to load.
-    */
-    void LoadResults(const QString file);
-
-    /**
-    * @brief Load XML file to the GUI.
-    * @param file Filename (inc. path) of XML file to load.
-    * @param checkedDirectory Path to the directory that the results were generated for.
-    */
-    void LoadResults(const QString file, const QString checkedDirectory);
-
-    /**
-    * @brief Load project file to the GUI.
-    * @param filePath Filename (inc. path) of project file to load.
-    */
-    void LoadProjectFile(const QString &filePath);
+     * @brief Load project file to the GUI.
+     * @param filePath Filename (inc. path) of project file to load.
+     */
+    void loadProjectFile(const QString &filePath);
 
     /**
      * @brief Load library file
@@ -468,118 +376,80 @@ private:
      * @param filename filename (no path)
      * @return error code
      */
-    Library::Error LoadLibrary(Library *library, QString filename);
+    Library::Error loadLibrary(Library *library, const QString &filename);
 
     /**
-    * @brief Tries to load library file, prints message on error
-    * @param library  library to use
-    * @param filename filename (no path)
-    * @return True if no error
-    */
-    bool TryLoadLibrary(Library *library, QString filename);
+     * @brief Tries to load library file, prints message on error
+     * @param library  library to use
+     * @param filename filename (no path)
+     * @return True if no error
+     */
+    bool tryLoadLibrary(Library *library, QString filename);
 
     /**
-    * @brief Update project MRU items in File-menu.
-    */
-    void UpdateMRUMenuItems();
+     * @brief Update project MRU items in File-menu.
+     */
+    void updateMRUMenuItems();
 
     /**
-    * @brief Add project file (path) to the MRU list.
-    * @param project Full path to the project file to add.
-    */
-    void AddProjectMRU(const QString &project);
+     * @brief Add project file (path) to the MRU list.
+     * @param project Full path to the project file to add.
+     */
+    void addProjectMRU(const QString &project);
 
     /**
-    * @brief Remove project file (path) from the MRU list.
-    * @param project Full path of the project file to remove.
-    */
-    void RemoveProjectMRU(const QString &project);
+     * @brief Remove project file (path) from the MRU list.
+     * @param project Full path of the project file to remove.
+     */
+    void removeProjectMRU(const QString &project);
 
-    /**
-    * @brief Program settings
-    *
-    */
+    /** @brief Program settings */
     QSettings *mSettings;
 
-    /**
-    * @brief Thread to check files
-    *
-    */
+    /** @brief Thread to analyze files */
     ThreadHandler *mThread;
 
-    /**
-    * @brief List of user defined applications to open errors with
-    *
-    */
+    /** @brief List of user defined applications to open errors with */
     ApplicationList *mApplications;
 
-    /**
-    * @brief Class to handle translation changes
-    *
-    */
+    /** @brief Class to handle translation changes */
     TranslationHandler *mTranslation;
 
-    /**
-    * @brief Class holding all UI components
-    *
-    */
+    /** @brief Class holding all UI components */
     Ui::MainWindow mUI;
 
-    /**
-    * @brief Current checked directory.
-    */
+    /** @brief Current analyzed directory. */
     QString mCurrentDirectory;
 
-    /**
-    * @brief Log view.
-    */
-    LogView *mLogView;
-
-    /**
-    * @brief Scratchpad.
-    */
+    /** @brief Scratchpad. */
     ScratchPad* mScratchPad;
 
-    /**
-    * @brief Project (file).
-    */
-    Project *mProject;
+    /** @brief Project (file). */
+    ProjectFile *mProjectFile;
 
-    /**
-    * @brief Filter field in the Filter toolbar.
-    */
+    /** @brief Filter field in the Filter toolbar. */
     QLineEdit* mLineEditFilter;
 
-    /**
-    * @brief Timer to delay filtering while typing.
-    */
+    /** @brief Timer to delay filtering while typing. */
     QTimer* mFilterTimer;
 
-    /**
-    * @brief GUI actions for selecting the checked platform.
-    */
+    /** @brief GUI actions for selecting the analyzed platform. */
     QActionGroup *mPlatformActions;
 
-    /**
-    * @brief GUI actions for selecting the coding standard.
-    */
+    /** @brief GUI actions for selecting the coding standard. */
     QActionGroup *mCStandardActions, *mCppStandardActions;
 
-    /**
-    * @brief GUI actions for selecting language.
-    */
+    /** @brief GUI actions for selecting language. */
     QActionGroup *mSelectLanguageActions;
 
     /**
-    * @brief Are we exiting the cppcheck?
-    * If this is true then the cppcheck is waiting for check threads to exit
-    * so that the application can be closed.
-    */
+     * @brief Are we exiting the cppcheck?
+     * If this is true then the cppcheck is waiting for check threads to exit
+     * so that the application can be closed.
+     */
     bool mExiting;
 
-    /**
-    * @brief Set to true in case of loading log file.
-    */
+    /** @brief Set to true in case of loading log file. */
     bool mIsLogfileLoaded;
 
     /**

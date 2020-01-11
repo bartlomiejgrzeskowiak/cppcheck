@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,9 +16,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "tokenize.h"
+
 #include "checkexceptionsafety.h"
+#include "settings.h"
 #include "testsuite.h"
+#include "tokenize.h"
 
 
 class TestExceptionSafety : public TestFixture {
@@ -29,7 +31,7 @@ public:
 private:
     Settings settings;
 
-    void run() {
+    void run() OVERRIDE {
         settings.addEnabled("all");
 
         TEST_CASE(destructors);
@@ -64,7 +66,7 @@ private:
 
         // Check char variable usage..
         CheckExceptionSafety checkExceptionSafety(&tokenizer, &settings, this);
-        checkExceptionSafety.runSimplifiedChecks(&tokenizer, &settings, this);
+        checkExceptionSafety.runChecks(&tokenizer, &settings, this);
     }
 
     void destructors() {

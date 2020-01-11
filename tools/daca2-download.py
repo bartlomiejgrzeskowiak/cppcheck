@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 #
 # Downloads all daca2 source code packages.
 #
@@ -11,16 +11,16 @@ import sys
 import shutil
 import glob
 import os
-import datetime
 import time
+import semver
 
-DEBIAN = ['ftp://ftp.se.debian.org/debian/',
-          'ftp://ftp.debian.org/debian/']
+DEBIAN = ('ftp://ftp.se.debian.org/debian/',
+          'ftp://ftp.debian.org/debian/')
 
 
 def wget(filepath):
     filename = filepath
-    if filepath.find('/') >= 0:
+    if '/' in filepath:
         filename = filename[filename.rfind('/') + 1:]
     for d in DEBIAN:
         subprocess.call(
@@ -30,6 +30,14 @@ def wget(filepath):
         print('Sleep for 10 seconds..')
         time.sleep(10)
     return False
+
+
+def latestvername(names):
+    if len(names) == 1:
+        return names[0]
+    names.sort(cmp=semver.cmp, key=lambda x: x[x.index(
+        '_')+1:x.index('.orig.tar')-x.index('_')+1])
+    return names[-1]
 
 
 def getpackages():
@@ -44,17 +52,20 @@ def getpackages():
     path = None
     archives = []
     filename = None
+    filenames = []
     for line in lines:
         line = line.strip()
         if len(line) < 4:
             if filename:
-                archives.append(path + '/' + filename)
+                archives.append(path + '/' + latestvername(filenames))
             path = None
             filename = None
+            filenames = []
         elif line[:12] == './pool/main/':
             path = line[2:-1]
-        elif path and line.find('.orig.tar.') > 0:
+        elif path and '.orig.tar.' in line:
             filename = line[1 + line.rfind(' '):]
+            filenames.append(filename)
 
     for a in archives:
         print(a)
@@ -68,20 +79,16 @@ def handleRemoveReadonly(func, path, exc):
         # Is the error an access error ?
         os.chmod(path, stat.S_IWUSR)
         func(path)
-    else:
-        raise
 
 
 def removeAll():
     count = 5
     while count > 0:
-        count = count - 1
+        count -= 1
 
         filenames = []
-        for g in glob.glob('[#_A-Za-z0-9]*'):
-            filenames.append(g)
-        for g in glob.glob('.[A-Za-z]*'):
-            filenames.append(g)
+        filenames.extend(glob.glob('[#_A-Za-z0-9]*'))
+        filenames.extend(glob.glob('.[A-Za-z]*'))
 
         try:
             for filename in filenames:
@@ -89,6 +96,7 @@ def removeAll():
                     shutil.rmtree(filename, onerror=handleRemoveReadonly)
                 else:
                     os.remove(filename)
+        # pylint: disable=undefined-variable
         except WindowsError as err:
             time.sleep(30)
             if count == 0:
@@ -121,7 +129,8 @@ def removeLargeFiles(path):
                 os.remove(g)
 
             # remove non-source files
-            elif g[-2:] != '.C' and g[-2:] != '.c' and g[-4:] != '.cc' and g[-4:] != '.cpp' and g[-4:] != '.cxx' and g[-2:] != '.h' and g[-2:] != '.H' and g[-4:] != '.c++' and g[-4:] != '.hpp' and g[-4:] != '.tpp' and g[-4:] != '.t++':
+            elif g[-2:] not in {'.C', '.c', '.H', '.h'} and g[-3:] != '.cc' and\
+                    g[-4:] not in {'.cpp', '.cxx', '.c++', '.hpp', '.tpp', '.t++'}:
                 os.remove(g)
 
 

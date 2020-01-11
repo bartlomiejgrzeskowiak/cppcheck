@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,22 +16,22 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <QObject>
 #include <QString>
 #include <QFile>
 #include "report.h"
 
 Report::Report(const QString &filename) :
+    QObject(),
     mFilename(filename)
 {
 }
 
 Report::~Report()
 {
-    Close();
+    close();
 }
 
-bool Report::Create()
+bool Report::create()
 {
     bool succeed = false;
     if (!mFile.isOpen()) {
@@ -41,7 +41,7 @@ bool Report::Create()
     return succeed;
 }
 
-bool Report::Open()
+bool Report::open()
 {
     bool succeed = false;
     if (!mFile.isOpen()) {
@@ -51,13 +51,13 @@ bool Report::Open()
     return succeed;
 }
 
-void Report::Close()
+void Report::close()
 {
     if (mFile.isOpen())
         mFile.close();
 }
 
-QFile* Report::GetFile()
+QFile* Report::getFile()
 {
     return &mFile;
 }

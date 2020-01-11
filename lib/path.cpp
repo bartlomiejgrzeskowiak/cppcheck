@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,11 +20,25 @@
 #undef __STRICT_ANSI__
 #endif
 #include "path.h"
+#include "utils.h"
+
 #include <algorithm>
-#include <vector>
-#include <sstream>
-#include <cstring>
 #include <cctype>
+#include <cstdlib>
+#include <cstring>
+#include <fstream>
+#include <sstream>
+
+#ifndef _WIN32
+#include <unistd.h>
+#else
+#include <direct.h>
+#endif
+#if defined(__CYGWIN__)
+#include <strings.h>
+#endif
+
+#include <simplecpp.h>
 
 /** Is the filesystem case insensitive? */
 static bool caseInsensitiveFilesystem()
@@ -40,11 +54,11 @@ static bool caseInsensitiveFilesystem()
 std::string Path::toNativeSeparators(std::string path)
 {
 #if defined(_WIN32)
-    char separ = '/';
-    char native = '\\';
+    const char separ = '/';
+    const char native = '\\';
 #else
-    char separ = '\\';
-    char native = '/';
+    const char separ = '\\';
+    const char native = '/';
 #endif
     std::replace(path.begin(), path.end(), separ, native);
     return path;
@@ -52,79 +66,20 @@ std::string Path::toNativeSeparators(std::string path)
 
 std::string Path::fromNativeSeparators(std::string path)
 {
-    char nonnative = '\\';
-    char newsepar = '/';
+    const char nonnative = '\\';
+    const char newsepar = '/';
     std::replace(path.begin(), path.end(), nonnative, newsepar);
     return path;
 }
 
 std::string Path::simplifyPath(std::string originalPath)
 {
-    const bool isUnc = originalPath.compare(0,2,"//") == 0;
-
-    // Remove ./, .//, ./// etc. at the beginning
-    while (originalPath.compare(0,2,"./") == 0) { // remove "./././"
-        size_t toErase = originalPath.find_first_not_of("/",2);
-        originalPath = originalPath.erase(0, toErase);
-    }
-
-    std::string subPath = "";
-    std::vector<std::string> pathParts;
-    for (std::size_t i = 0; i < originalPath.size(); ++i) {
-        if (originalPath[i] == '/' || originalPath[i] == '\\') {
-            if (subPath.length() > 0) {
-                pathParts.push_back(subPath);
-                subPath = "";
-            }
-
-            pathParts.push_back(std::string(1 , originalPath[i]));
-        } else
-            subPath.append(1, originalPath[i]);
-    }
-
-    if (subPath.length() > 0)
-        pathParts.push_back(subPath);
-
-    // First filter out all double slashes
-    for (unsigned int i = 1; i < pathParts.size(); ++i) {
-        if (i > 0 && pathParts[i] == "/" && pathParts[i-1] == "/") {
-            pathParts.erase(pathParts.begin() + static_cast<int>(i) - 1);
-            --i;
-        }
-    }
-
-    for (unsigned int i = 1; i < pathParts.size(); ++i) {
-        if (i > 1 && pathParts[i-2] != ".." && pathParts[i] == ".." && pathParts.size() > i + 1) {
-            pathParts.erase(pathParts.begin() + static_cast<int>(i) + 1);
-            pathParts.erase(pathParts.begin() + static_cast<int>(i));
-            pathParts.erase(pathParts.begin() + static_cast<int>(i) - 1);
-            pathParts.erase(pathParts.begin() + static_cast<int>(i) - 2);
-            i = 0;
-        } else if (i > 0 && pathParts[i] == ".") {
-            pathParts.erase(pathParts.begin() + static_cast<int>(i));
-            i = 0;
-        } else if (i > 0 && pathParts[i] == "/" && pathParts[i-1] == "/") {
-            pathParts.erase(pathParts.begin() + static_cast<int>(i) - 1);
-            i = 0;
-        }
-    }
-
-    if (isUnc) {
-        // Restore the leading double slash
-        pathParts.insert(pathParts.begin(), "/");
-    }
-
-    std::ostringstream oss;
-    for (std::vector<std::string>::size_type i = 0; i < pathParts.size(); ++i) {
-        oss << pathParts[i];
-    }
-
-    return oss.str();
+    return simplecpp::simplifyPath(originalPath);
 }
 
 std::string Path::getPathFromFilename(const std::string &filename)
 {
-    std::size_t pos = filename.find_last_of("\\/");
+    const std::size_t pos = filename.find_last_of("\\/");
 
     if (pos != std::string::npos)
         return filename.substr(0, 1 + pos);
@@ -132,20 +87,9 @@ std::string Path::getPathFromFilename(const std::string &filename)
     return "";
 }
 
-
 bool Path::sameFileName(const std::string &fname1, const std::string &fname2)
 {
-#if defined(__linux__) || defined(__sun) || defined(__hpux)
-    return bool(fname1 == fname2);
-#elif defined(_MSC_VER) || (defined(__GNUC__) && defined(_WIN32))
-    return bool(_stricmp(fname1.c_str(), fname2.c_str()) == 0);
-#elif defined(__GNUC__)
-    return bool(strcasecmp(fname1.c_str(), fname2.c_str()) == 0);
-#elif defined(__BORLANDC__)
-    return bool(stricmp(fname1.c_str(), fname2.c_str()) == 0);
-#else
-#error Platform filename compare function needed
-#endif
+    return caseInsensitiveFilesystem() ? (caseInsensitiveStringCompare(fname1, fname2) == 0) : (fname1 == fname2);
 }
 
 // This wrapper exists because Sun's CC does not allow a static_cast
@@ -183,17 +127,52 @@ std::string Path::getFilenameExtensionInLowerCase(const std::string &path)
     return extension;
 }
 
+std::string Path::getCurrentPath()
+{
+    char currentPath[4096];
+
+#ifndef _WIN32
+    if (getcwd(currentPath, 4096) != nullptr)
+#else
+    if (_getcwd(currentPath, 4096) != nullptr)
+#endif
+        return std::string(currentPath);
+
+    return emptyString;
+}
+
+bool Path::isAbsolute(const std::string& path)
+{
+    const std::string& nativePath = toNativeSeparators(path);
+
+#ifdef _WIN32
+    if (path.length() < 2)
+        return false;
+
+    // On Windows, 'C:\foo\bar' is an absolute path, while 'C:foo\bar' is not
+    if (nativePath.compare(0, 2, "\\\\") == 0 || (std::isalpha(nativePath[0]) != 0 && nativePath.compare(1, 2, ":\\") == 0))
+        return true;
+#else
+    if (!nativePath.empty() && nativePath[0] == '/')
+        return true;
+#endif
+
+    return false;
+}
+
 std::string Path::getRelativePath(const std::string& absolutePath, const std::vector<std::string>& basePaths)
 {
-    for (std::vector<std::string>::const_iterator i = basePaths.begin(); i != basePaths.end(); ++i) {
-        if (absolutePath == *i || i->empty()) // Seems to be a file, or path is empty
+    for (const std::string &bp : basePaths) {
+        if (absolutePath == bp || bp.empty()) // Seems to be a file, or path is empty
             continue;
 
-        bool endsWithSep = (*i)[i->length()-1] == '/';
-        if (absolutePath.compare(0, i->length(), *i) == 0 && absolutePath[i->length() - (endsWithSep?1:0)] == '/') {
-            std::string rest = absolutePath.substr(i->length() + (endsWithSep?0:1));
-            return rest;
-        }
+        if (absolutePath.compare(0, bp.length(), bp) != 0)
+            continue;
+
+        if (endsWith(bp,'/'))
+            return absolutePath.substr(bp.length());
+        else if (absolutePath.size() > bp.size() && absolutePath[bp.length()] == '/')
+            return absolutePath.substr(bp.length() + 1);
     }
     return absolutePath;
 }
@@ -202,26 +181,23 @@ bool Path::isC(const std::string &path)
 {
     // In unix, ".C" is considered C++ file
     const std::string extension = getFilenameExtension(path);
-    return (extension == ".c");
+    return extension == ".c" ||
+           extension == ".cl";
 }
 
 bool Path::isCPP(const std::string &path)
 {
     const std::string extension = getFilenameExtensionInLowerCase(path);
-    if (extension == ".cpp" ||
-        extension == ".cxx" ||
-        extension == ".cc" ||
-        extension == ".c++" ||
-        extension == ".hpp" ||
-        extension == ".hxx" ||
-        extension == ".hh" ||
-        extension == ".tpp" ||
-        extension == ".txx") {
-        return true;
-    }
-
-    // In unix, ".C" is considered C++ file
-    return (getFilenameExtension(path) == ".C");
+    return extension == ".cpp" ||
+           extension == ".cxx" ||
+           extension == ".cc" ||
+           extension == ".c++" ||
+           extension == ".hpp" ||
+           extension == ".hxx" ||
+           extension == ".hh" ||
+           extension == ".tpp" ||
+           extension == ".txx" ||
+           getFilenameExtension(path) == ".C"; // In unix, ".C" is considered C++ file
 }
 
 bool Path::acceptFile(const std::string &path, const std::set<std::string> &extra)
@@ -242,7 +218,7 @@ std::string Path::getAbsoluteFilePath(const std::string& filePath)
     char absolute[_MAX_PATH];
     if (_fullpath(absolute, filePath.c_str(), _MAX_PATH))
         absolute_path = absolute;
-#elif defined(__linux__) || defined(__sun) || defined(__hpux) || defined(__GNUC__)
+#elif defined(__linux__) || defined(__sun) || defined(__hpux) || defined(__GNUC__) || defined(__CPPCHECK__)
     char * absolute = realpath(filePath.c_str(), nullptr);
     if (absolute)
         absolute_path = absolute;
@@ -251,4 +227,25 @@ std::string Path::getAbsoluteFilePath(const std::string& filePath)
 #error Platform absolute path function needed
 #endif
     return absolute_path;
+}
+
+std::string Path::stripDirectoryPart(const std::string &file)
+{
+#if defined(_WIN32) && !defined(__MINGW32__)
+    const char native = '\\';
+#else
+    const char native = '/';
+#endif
+
+    const std::string::size_type p = file.rfind(native);
+    if (p != std::string::npos) {
+        return file.substr(p + 1);
+    }
+    return file;
+}
+
+bool Path::fileExists(const std::string &file)
+{
+    std::ifstream f(file.c_str());
+    return f.is_open();
 }

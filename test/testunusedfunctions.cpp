@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,11 +16,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
-#include "tokenize.h"
-#include "testsuite.h"
 #include "checkunusedfunctions.h"
+#include "platform.h"
+#include "settings.h"
+#include "testsuite.h"
+#include "tokenize.h"
 
+#include <ostream>
+#include <string>
 
 class TestUnusedFunctions : public TestFixture {
 public:
@@ -30,13 +33,14 @@ public:
 private:
     Settings settings;
 
-    void run() {
+    void run() OVERRIDE {
         settings.addEnabled("style");
 
         TEST_CASE(incondition);
         TEST_CASE(return1);
         TEST_CASE(return2);
         TEST_CASE(callback1);
+        TEST_CASE(callback2);
         TEST_CASE(else1);
         TEST_CASE(functionpointer);
         TEST_CASE(template1);
@@ -58,6 +62,8 @@ private:
         TEST_CASE(lineNumber); // Ticket 3059
 
         TEST_CASE(ignore_declaration); // ignore declaration
+
+        TEST_CASE(operatorOverload);
     }
 
     void check(const char code[], Settings::PlatformType platform = Settings::Native) {
@@ -74,7 +80,12 @@ private:
         // Check for unused functions..
         CheckUnusedFunctions checkUnusedFunctions(&tokenizer, &settings, this);
         checkUnusedFunctions.parseTokens(tokenizer,  "someFile.c", &settings);
-        checkUnusedFunctions.check(this, settings);
+        // check() returns error if and only if errout is not empty.
+        if (checkUnusedFunctions.check(this, settings)) {
+            ASSERT(errout.str() != "");
+        } else {
+            ASSERT_EQUALS("", errout.str());
+        }
     }
 
     void incondition() {
@@ -108,6 +119,19 @@ private:
               "    void (*f)() = cond ? f1 : NULL;\n"
               "}");
         ASSERT_EQUALS("", errout.str());
+    }
+
+    void callback2() { // #8677
+        check("class C {\n"
+              "public:\n"
+              "    void callback();\n"
+              "    void start();\n"
+              "};\n"
+              "\n"
+              "void C::callback() {}\n" // <- not unused
+              "\n"
+              "void C::start() { ev.set<C, &C::callback>(this); }");
+        ASSERT_EQUALS("[test.cpp:9]: (style) The function 'start' is never used.\n", errout.str());
     }
 
     void else1() {
@@ -188,7 +212,9 @@ private:
               "template<class T> void g()\n"
               "{\n"
               "    f();\n"
-              "}");
+              "}\n"
+              "\n"
+              "void h() { g<int>(); h(); }");
         ASSERT_EQUALS("", errout.str());
     }
 
@@ -246,6 +272,9 @@ private:
 
     void operator1() {
         check("struct Foo { void operator()(int a) {} };");
+        ASSERT_EQUALS("", errout.str());
+
+        check("struct Foo { operator std::string(int a) {} };");
         ASSERT_EQUALS("", errout.str());
     }
 
@@ -309,6 +338,17 @@ private:
               "    A() : m_i(foo())\n"
               "    {}\n"
               "int m_i;\n"
+              "};");
+        ASSERT_EQUALS("", errout.str());
+
+        // #8580
+        check("int foo() { return 12345; }\n"
+              "int bar(std::function<int()> func) { return func(); }\n"
+              "\n"
+              "class A {\n"
+              "public:\n"
+              "  A() : a(bar([] { return foo(); })) {}\n"
+              "  const int a;\n"
               "};");
         ASSERT_EQUALS("", errout.str());
     }
@@ -380,6 +420,69 @@ private:
               "void (*list[])(void) = {f}");
         ASSERT_EQUALS("", errout.str());
     }
+
+    void operatorOverload() {
+        check("class A {\n"
+              "private:\n"
+              "    friend std::ostream & operator<<(std::ostream &, const A&);\n"
+              "};\n"
+              "std::ostream & operator<<(std::ostream &os, const A&) {\n"
+              "    os << \"This is class A\";\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+
+        check("class A{};\n"
+              "A operator + (const A &, const A &){ return A(); }\n"
+              "A operator - (const A &, const A &){ return A(); }\n"
+              "A operator * (const A &, const A &){ return A(); }\n"
+              "A operator / (const A &, const A &){ return A(); }\n"
+              "A operator % (const A &, const A &){ return A(); }\n"
+              "A operator & (const A &, const A &){ return A(); }\n"
+              "A operator | (const A &, const A &){ return A(); }\n"
+              "A operator ~ (const A &){ return A(); }\n"
+              "A operator ! (const A &){ return A(); }\n"
+              "bool operator < (const A &, const A &){ return true; }\n"
+              "bool operator > (const A &, const A &){ return true; }\n"
+              "A operator += (const A &, const A &){ return A(); }\n"
+              "A operator -= (const A &, const A &){ return A(); }\n"
+              "A operator *= (const A &, const A &){ return A(); }\n"
+              "A operator /= (const A &, const A &){ return A(); }\n"
+              "A operator %= (const A &, const A &){ return A(); }\n"
+              "A operator &= (const A &, const A &){ return A(); }\n"
+              "A operator ^= (const A &, const A &){ return A(); }\n"
+              "A operator |= (const A &, const A &){ return A(); }\n"
+              "A operator << (const A &, const int){ return A(); }\n"
+              "A operator >> (const A &, const int){ return A(); }\n"
+              "A operator <<= (const A &, const int){ return A(); }\n"
+              "A operator >>= (const A &, const int){ return A(); }\n"
+              "bool operator == (const A &, const A &){ return true; }\n"
+              "bool operator != (const A &, const A &){ return true; }\n"
+              "bool operator <= (const A &, const A &){ return true; }\n"
+              "bool operator >= (const A &, const A &){ return true; }\n"
+              "A operator && (const A &, const int){ return A(); }\n"
+              "A operator || (const A &, const int){ return A(); }\n"
+              "A operator ++ (const A &, const int){ return A(); }\n"
+              "A operator ++ (const A &){ return A(); }\n"
+              "A operator -- (const A &, const int){ return A(); }\n"
+              "A operator -- (const A &){ return A(); }\n"
+              "A operator , (const A &, const A &){ return A(); }\n");
+        ASSERT_EQUALS("", errout.str());
+
+
+        check("class A {\n"
+              "public:\n"
+              "    static void * operator new(std::size_t);\n"
+              "    static void * operator new[](std::size_t);\n"
+              "};\n"
+              "void * A::operator new(std::size_t s) {\n"
+              "    return malloc(s);\n"
+              "}\n"
+              "void * A::operator new[](std::size_t s) {\n"
+              "    return malloc(s);\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
 };
 
 REGISTER_TEST(TestUnusedFunctions)

@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@
 //---------------------------------------------------------------------------
 
 Check::Check(const std::string &aname)
-    : _tokenizer(0), _settings(0), _errorLogger(0), _name(aname)
+    : mTokenizer(nullptr), mSettings(nullptr), mErrorLogger(nullptr), mName(aname)
 {
     for (std::list<Check*>::iterator i = instances().begin(); i != instances().end(); ++i) {
         if ((*i)->name() > aname) {
@@ -38,7 +38,20 @@ Check::Check(const std::string &aname)
 
 void Check::reportError(const ErrorLogger::ErrorMessage &errmsg)
 {
-    std::cout << errmsg.toXML(true, 1) << std::endl;
+    std::cout << errmsg.toXML() << std::endl;
+}
+
+bool Check::wrongData(const Token *tok, bool condition, const char *str)
+{
+#if defined(DACA2) || defined(UNSTABLE)
+    if (condition) {
+        reportError(tok, Severity::debug, "DacaWrongData", "Wrong data detected by condition " + std::string(str));
+    }
+#else
+    (void)tok;
+    (void)str;
+#endif
+    return condition;
 }
 
 std::list<Check *> &Check::instances()
@@ -52,4 +65,31 @@ std::list<Check *> &Check::instances()
     static std::list<Check *> _instances;
     return _instances;
 #endif
+}
+
+std::string Check::getMessageId(const ValueFlow::Value &value, const char id[])
+{
+    if (value.condition != nullptr)
+        return id + std::string("Cond");
+    if (value.safe)
+        return std::string("safe") + (char)std::toupper(id[0]) + (id + 1);
+    return id;
+}
+
+ErrorPath Check::getErrorPath(const Token* errtok, const ValueFlow::Value* value, const std::string& bug) const
+{
+    ErrorPath errorPath;
+    if (!value) {
+        errorPath.emplace_back(errtok, bug);
+    } else if (mSettings->verbose || mSettings->xml || !mSettings->templateLocation.empty()) {
+        errorPath = value->errorPath;
+        errorPath.emplace_back(errtok, bug);
+    } else {
+        if (value->condition)
+            errorPath.emplace_back(value->condition, "condition '" + value->condition->expressionString() + "'");
+        //else if (!value->isKnown() || value->defaultArg)
+        //    errorPath = value->callstack;
+        errorPath.emplace_back(errtok, bug);
+    }
+    return errorPath;
 }

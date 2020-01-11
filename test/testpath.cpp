@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,9 +16,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <string>
-#include "testsuite.h"
 #include "path.h"
+#include "testsuite.h"
+
+#include <string>
+#include <vector>
 
 class TestPath : public TestFixture {
 public:
@@ -27,62 +29,18 @@ public:
 
 private:
 
-    void run() {
-        TEST_CASE(simplify_path);
-        TEST_CASE(accept_file);
+    void run() OVERRIDE {
+        TEST_CASE(removeQuotationMarks);
+        TEST_CASE(acceptFile);
+        TEST_CASE(getCurrentPath);
+        TEST_CASE(isAbsolute);
         TEST_CASE(getRelative);
         TEST_CASE(is_c);
         TEST_CASE(is_cpp);
         TEST_CASE(get_path_from_filename);
     }
 
-    void simplify_path() const {
-        // Path::simplifyPath()
-        ASSERT_EQUALS("index.h", Path::simplifyPath("index.h"));
-        ASSERT_EQUALS("index.h", Path::simplifyPath("./index.h"));
-        ASSERT_EQUALS("index.h", Path::simplifyPath(".//index.h"));
-        ASSERT_EQUALS("index.h", Path::simplifyPath(".///index.h"));
-        ASSERT_EQUALS("/index.h", Path::simplifyPath("/index.h"));
-        ASSERT_EQUALS("/path/", Path::simplifyPath("/path/"));
-        ASSERT_EQUALS("/", Path::simplifyPath("/"));
-        ASSERT_EQUALS("/", Path::simplifyPath("/."));
-        ASSERT_EQUALS("/", Path::simplifyPath("/./"));
-        ASSERT_EQUALS("/index.h", Path::simplifyPath("/./index.h"));
-        ASSERT_EQUALS("/", Path::simplifyPath("/.//"));
-        ASSERT_EQUALS("/index.h", Path::simplifyPath("/.//index.h"));
-        ASSERT_EQUALS("../index.h", Path::simplifyPath("../index.h"));
-        ASSERT_EQUALS("/index.h", Path::simplifyPath("/path/../index.h"));
-        ASSERT_EQUALS("index.h", Path::simplifyPath("./path/../index.h"));
-        ASSERT_EQUALS("index.h", Path::simplifyPath("path/../index.h"));
-        ASSERT_EQUALS("/index.h", Path::simplifyPath("/path//../index.h"));
-        ASSERT_EQUALS("index.h", Path::simplifyPath("./path//../index.h"));
-        ASSERT_EQUALS("index.h", Path::simplifyPath("path//../index.h"));
-        ASSERT_EQUALS("/index.h", Path::simplifyPath("/path/..//index.h"));
-        ASSERT_EQUALS("index.h", Path::simplifyPath("./path/..//index.h"));
-        ASSERT_EQUALS("index.h", Path::simplifyPath("path/..//index.h"));
-        ASSERT_EQUALS("/index.h", Path::simplifyPath("/path//..//index.h"));
-        ASSERT_EQUALS("index.h", Path::simplifyPath("./path//..//index.h"));
-        ASSERT_EQUALS("index.h", Path::simplifyPath("path//..//index.h"));
-        ASSERT_EQUALS("/index.h", Path::simplifyPath("/path/../other/../index.h"));
-        ASSERT_EQUALS("/index.h", Path::simplifyPath("/path/../other///././../index.h"));
-        ASSERT_EQUALS("/index.h", Path::simplifyPath("/path/../other/././..///index.h"));
-        ASSERT_EQUALS("/index.h", Path::simplifyPath("/path/../other///././..///index.h"));
-        ASSERT_EQUALS("../path/index.h", Path::simplifyPath("../path/other/../index.h"));
-        ASSERT_EQUALS("a/index.h", Path::simplifyPath("a/../a/index.h"));
-        ASSERT_EQUALS("a/..", Path::simplifyPath("a/.."));
-        ASSERT_EQUALS("a/..", Path::simplifyPath("./a/.."));
-        ASSERT_EQUALS("../../src/test.cpp", Path::simplifyPath("../../src/test.cpp"));
-        ASSERT_EQUALS("../../../src/test.cpp", Path::simplifyPath("../../../src/test.cpp"));
-        ASSERT_EQUALS("src/test.cpp", Path::simplifyPath(".//src/test.cpp"));
-        ASSERT_EQUALS("src/test.cpp", Path::simplifyPath(".///src/test.cpp"));
-        ASSERT_EQUALS("test.cpp", Path::simplifyPath("./././././test.cpp"));
-        TODO_ASSERT_EQUALS("src", "src/abc/..", Path::simplifyPath("src/abc/.."));
-        // TODO: don't crash ASSERT_EQUALS("src", Path::simplifyPath("src/abc/../"));
-
-        // Handling of UNC paths on Windows
-        ASSERT_EQUALS("//src/test.cpp", Path::simplifyPath("//src/test.cpp"));
-        ASSERT_EQUALS("//src/test.cpp", Path::simplifyPath("///src/test.cpp"));
-
+    void removeQuotationMarks() const {
         // Path::removeQuotationMarks()
         ASSERT_EQUALS("index.cpp", Path::removeQuotationMarks("index.cpp"));
         ASSERT_EQUALS("index.cpp", Path::removeQuotationMarks("\"index.cpp"));
@@ -94,7 +52,7 @@ private:
         ASSERT_EQUALS("the/path to/index.cpp", Path::removeQuotationMarks("\"the/path to/index.cpp\""));
     }
 
-    void accept_file() const {
+    void acceptFile() const {
         ASSERT(Path::acceptFile("index.cpp"));
         ASSERT(Path::acceptFile("index.invalid.cpp"));
         ASSERT(Path::acceptFile("index.invalid.Cpp"));
@@ -110,12 +68,37 @@ private:
         ASSERT_EQUALS(false, Path::acceptFile("index.hpp"));
     }
 
+    void getCurrentPath() const {
+        ASSERT_EQUALS(true, Path::isAbsolute(Path::getCurrentPath()));
+    }
+
+    void isAbsolute() const {
+#ifdef _WIN32
+        ASSERT_EQUALS(true, Path::isAbsolute("C:\\foo\\bar"));
+        ASSERT_EQUALS(true, Path::isAbsolute("C:/foo/bar"));
+        ASSERT_EQUALS(true, Path::isAbsolute("\\\\foo\\bar"));
+        ASSERT_EQUALS(false, Path::isAbsolute("foo\\bar"));
+        ASSERT_EQUALS(false, Path::isAbsolute("foo/bar"));
+        ASSERT_EQUALS(false, Path::isAbsolute("foo.cpp"));
+        ASSERT_EQUALS(false, Path::isAbsolute("C:foo.cpp"));
+        ASSERT_EQUALS(false, Path::isAbsolute("C:foo\\bar.cpp"));
+        ASSERT_EQUALS(false, Path::isAbsolute("bar.cpp"));
+        TODO_ASSERT_EQUALS(true, false, Path::isAbsolute("\\"));
+#else
+        ASSERT_EQUALS(true, Path::isAbsolute("/foo/bar"));
+        ASSERT_EQUALS(true, Path::isAbsolute("/"));
+        ASSERT_EQUALS(false, Path::isAbsolute("foo/bar"));
+        ASSERT_EQUALS(false, Path::isAbsolute("foo.cpp"));
+#endif
+    }
+
     void getRelative() const {
-        std::vector<std::string> basePaths;
-        basePaths.push_back(""); // Don't crash with empty paths
-        basePaths.push_back("C:/foo");
-        basePaths.push_back("C:/bar/");
-        basePaths.push_back("C:/test.cpp");
+        const std::vector<std::string> basePaths = {
+            "", // Don't crash with empty paths
+            "C:/foo",
+            "C:/bar/",
+            "C:/test.cpp"
+        };
 
         ASSERT_EQUALS("x.c", Path::getRelativePath("C:/foo/x.c", basePaths));
         ASSERT_EQUALS("y.c", Path::getRelativePath("C:/bar/y.c", basePaths));

@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -637,8 +637,8 @@ void CheckOther::checkIncorrectLogicOperator()
                 { "(",    Second, "<",    "&&", First,  "<",    ")",    MoreEqual, false }, // (3 < x)  && (x < 1)  <- always false
                 { "(",    Second, ">",    "&&", Second, "<",    ")",    LessEqual, false }, // (1 > x)  && (3 < x)  <- always false
                 { "(",    Second, "<",    "&&", Second, ">",    ")",    MoreEqual, false }, // (3 < x)  && (1 > x)  <- always false
-                { "(",    First , ">|>=", "||", First,  "<|<=", ")",    Less,      true  }, // (x > 3)  || (x < 10) <- always true
-                { "(",    First , "<|<=", "||", First,  ">|>=", ")",    More,      true  }, // (x < 10) || (x > 3)  <- always true
+                { "(",    First, ">|>=", "||", First,  "<|<=", ")",    Less,      true  },  // (x > 3)  || (x < 10) <- always true
+                { "(",    First, "<|<=", "||", First,  ">|>=", ")",    More,      true  },  // (x < 10) || (x > 3)  <- always true
                 { "(",    Second, "<|<=", "||", First,  "<|<=", ")",    Less,      true  }, // (3 < x)  || (x < 10) <- always true
                 { "(",    First,  "<|<=", "||", Second, "<|<=", ")",    More,      true  }, // (x < 10) || (3 < x)  <- always true
                 { "(",    First,  ">|>=", "||", Second, ">|>=", ")",    Less,      true  }, // (x > 3)  || (10 > x) <- always true
@@ -796,7 +796,7 @@ void CheckOther::invalidScanf()
 
         bool format = false;
 
-        // scan the string backwards, so we dont need to keep states
+        // scan the string backwards, so we don't need to keep states
         const std::string &formatstr(formatToken->str());
         for (unsigned int i = 1; i < formatstr.length(); i++) {
             if (formatstr[i] == '%')
@@ -1064,7 +1064,7 @@ public:
 
         /** is variable unused? */
         bool unused() const {
-            return (_read == false && _write == false);
+            return (!_read && !_write);
         }
 
         const Token *_name;
@@ -3380,7 +3380,7 @@ void CheckOther::assignmentInAssertError(const Token *tok, const std::string &va
 {
     reportError(tok, Severity::warning,
                 "assignmentInAssert", "Assert statement modifies '" + varname + "'.\n"
-                "Variable '" + varname + "' is modified insert assert statement. "
+                "Variable '" + varname + "' is modified inside assert statement. "
                 "Assert statements are removed from release builds so the code inside "
                 "assert statement is not run. If the code is needed also in release "
                 "builds this is a bug.");

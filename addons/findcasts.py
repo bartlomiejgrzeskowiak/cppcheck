@@ -1,4 +1,4 @@
-#/usr/bin/python
+#!/usr/bin/env python3
 #
 # Locate casts in the code
 #
@@ -6,17 +6,21 @@
 import cppcheckdata
 import sys
 
-messages = []
-
 for arg in sys.argv[1:]:
-    print('Checking ' + arg + '...')
-    data = cppcheckdata.parsedump(arg)
+    if arg.startswith('-'):
+        continue
 
-    for cfg in data.configurations:
-        if len(data.configurations) > 1:
-            print('Checking ' + arg + ', config "' + cfg.name + '"...')
+    print('Checking %s...' % arg)
+    data = cppcheckdata.CppcheckData(arg)
+
+    for cfg in data.iterconfigurations():
+        print('Checking %s, config %s...' % (arg, cfg.name))
         for token in cfg.tokenlist:
             if token.str != '(' or not token.astOperand1 or token.astOperand2:
+                continue
+
+            # Is it a lambda?
+            if token.astOperand1.str == '{':
                 continue
 
             # we probably have a cast.. if there is something inside the parentheses
@@ -33,8 +37,4 @@ for arg in sys.argv[1:]:
             if typetok.str == 'void':
                 continue
 
-            msg = '[' + token.file + ':' + str(
-                token.linenr) + '] (information) findcasts.py: found a cast\n'
-            if not msg in messages:
-                messages.append(msg)
-                sys.stderr.write(msg)
+            cppcheckdata.reportError(token, 'information', 'found a cast', 'findcasts', 'cast')

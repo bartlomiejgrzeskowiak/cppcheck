@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,16 @@
 
 #include "check.h"
 #include "config.h"
+#include "errorlogger.h"
+
+#include <ostream>
+#include <string>
+
+class Function;
+class Settings;
+class Token;
+class Tokenizer;
+class Variable;
 
 /// @addtogroup Checks
 /// @{
@@ -40,16 +50,10 @@ public:
     }
 
     /** @brief Run checks on the normal token list */
-    void runChecks(const Tokenizer *tokenizer, const Settings *settings, ErrorLogger *errorLogger) {
+    void runChecks(const Tokenizer *tokenizer, const Settings *settings, ErrorLogger *errorLogger) OVERRIDE {
         CheckIO checkIO(tokenizer, settings, errorLogger);
 
         checkIO.checkWrongPrintfScanfArguments();
-    }
-
-    /** @brief Run checks on the simplified token list */
-    void runSimplifiedChecks(const Tokenizer *tokenizer, const Settings *settings, ErrorLogger *errorLogger) {
-        CheckIO checkIO(tokenizer, settings, errorLogger);
-
         checkIO.checkCoutCerrMisusage();
         checkIO.checkFileUsage();
         checkIO.invalidScanf();
@@ -70,7 +74,7 @@ public:
 private:
     class ArgumentInfo {
     public:
-        ArgumentInfo(const Token *arg, const Settings *settings, bool isCPP);
+        ArgumentInfo(const Token *arg, const Settings *settings, bool _isCPP);
         ~ArgumentInfo();
 
         bool isArrayOrPointer() const;
@@ -110,26 +114,26 @@ private:
     void seekOnAppendedFileError(const Token *tok);
     void invalidScanfError(const Token *tok);
     void wrongPrintfScanfArgumentsError(const Token* tok,
-                                        const std::string &function,
-                                        unsigned int numFormat,
-                                        unsigned int numFunction);
+                                        const std::string &functionName,
+                                        nonneg int numFormat,
+                                        nonneg int numFunction);
     void wrongPrintfScanfPosixParameterPositionError(const Token* tok, const std::string& functionName,
-            unsigned int index, unsigned int numFunction);
-    void invalidScanfArgTypeError_s(const Token* tok, unsigned int numFormat, const std::string& specifier, const ArgumentInfo* argInfo);
-    void invalidScanfArgTypeError_int(const Token* tok, unsigned int numFormat, const std::string& specifier, const ArgumentInfo* argInfo, bool isUnsigned);
-    void invalidScanfArgTypeError_float(const Token* tok, unsigned int numFormat, const std::string& specifier, const ArgumentInfo* argInfo);
-    void invalidPrintfArgTypeError_s(const Token* tok, unsigned int numFormat, const ArgumentInfo* argInfo);
-    void invalidPrintfArgTypeError_n(const Token* tok, unsigned int numFormat, const ArgumentInfo* argInfo);
-    void invalidPrintfArgTypeError_p(const Token* tok, unsigned int numFormat, const ArgumentInfo* argInfo);
-    void invalidPrintfArgTypeError_int(const Token* tok, unsigned int numFormat, const std::string& specifier, const ArgumentInfo* argInfo);
-    void invalidPrintfArgTypeError_uint(const Token* tok, unsigned int numFormat, const std::string& specifier, const ArgumentInfo* argInfo);
-    void invalidPrintfArgTypeError_sint(const Token* tok, unsigned int numFormat, const std::string& specifier, const ArgumentInfo* argInfo);
-    void invalidPrintfArgTypeError_float(const Token* tok, unsigned int numFormat, const std::string& specifier, const ArgumentInfo* argInfo);
-    void invalidLengthModifierError(const Token* tok, unsigned int numFormat, const std::string& modifier);
-    void invalidScanfFormatWidthError(const Token* tok, unsigned int numFormat, int width, const Variable *var, char c);
-    static void argumentType(std::ostream & s, const ArgumentInfo * argInfo);
+            nonneg int index, nonneg int numFunction);
+    void invalidScanfArgTypeError_s(const Token* tok, nonneg int numFormat, const std::string& specifier, const ArgumentInfo* argInfo);
+    void invalidScanfArgTypeError_int(const Token* tok, nonneg int numFormat, const std::string& specifier, const ArgumentInfo* argInfo, bool isUnsigned);
+    void invalidScanfArgTypeError_float(const Token* tok, nonneg int numFormat, const std::string& specifier, const ArgumentInfo* argInfo);
+    void invalidPrintfArgTypeError_s(const Token* tok, nonneg int numFormat, const ArgumentInfo* argInfo);
+    void invalidPrintfArgTypeError_n(const Token* tok, nonneg int numFormat, const ArgumentInfo* argInfo);
+    void invalidPrintfArgTypeError_p(const Token* tok, nonneg int numFormat, const ArgumentInfo* argInfo);
+    void invalidPrintfArgTypeError_uint(const Token* tok, nonneg int numFormat, const std::string& specifier, const ArgumentInfo* argInfo);
+    void invalidPrintfArgTypeError_sint(const Token* tok, nonneg int numFormat, const std::string& specifier, const ArgumentInfo* argInfo);
+    void invalidPrintfArgTypeError_float(const Token* tok, nonneg int numFormat, const std::string& specifier, const ArgumentInfo* argInfo);
+    void invalidLengthModifierError(const Token* tok, nonneg int numFormat, const std::string& modifier);
+    void invalidScanfFormatWidthError(const Token* tok, nonneg int numFormat, int width, const Variable *var, char c);
+    static void argumentType(std::ostream & os, const ArgumentInfo * argInfo);
+    static Severity::SeverityType getSeverity(const ArgumentInfo *argInfo);
 
-    void getErrorMessages(ErrorLogger *errorLogger, const Settings *settings) const {
+    void getErrorMessages(ErrorLogger *errorLogger, const Settings *settings) const OVERRIDE {
         CheckIO c(nullptr, settings, errorLogger);
 
         c.coutCerrMisusageError(nullptr,  "cout");
@@ -147,12 +151,12 @@ private:
         c.invalidPrintfArgTypeError_s(nullptr,  1, nullptr);
         c.invalidPrintfArgTypeError_n(nullptr,  1, nullptr);
         c.invalidPrintfArgTypeError_p(nullptr,  1, nullptr);
-        c.invalidPrintfArgTypeError_int(nullptr,  1, "X", nullptr);
         c.invalidPrintfArgTypeError_uint(nullptr,  1, "u", nullptr);
         c.invalidPrintfArgTypeError_sint(nullptr,  1, "i", nullptr);
         c.invalidPrintfArgTypeError_float(nullptr,  1, "f", nullptr);
         c.invalidLengthModifierError(nullptr,  1, "I");
         c.invalidScanfFormatWidthError(nullptr,  10, 5, nullptr, 's');
+        c.invalidScanfFormatWidthError(nullptr,  99, -1, nullptr, 's');
         c.wrongPrintfScanfPosixParameterPositionError(nullptr,  "printf", 2, 1);
     }
 
@@ -160,7 +164,7 @@ private:
         return "IO using format string";
     }
 
-    std::string classInfo() const {
+    std::string classInfo() const OVERRIDE {
         return "Check format string input/output operations.\n"
                "- Bad usage of the function 'sprintf' (overlapping data)\n"
                "- Missing or wrong width specifiers in 'scanf' format string\n"

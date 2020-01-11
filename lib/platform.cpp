@@ -1,6 +1,6 @@
 /*
 * Cppcheck - A tool for static C/C++ code analysis
-* Copyright (C) 2007-2016 Cppcheck team.
+* Copyright (C) 2007-2019 Cppcheck team.
 *
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -17,8 +17,12 @@
 */
 
 #include "platform.h"
+#include "path.h"
 #include "tinyxml2.h"
-
+#include <cstdlib>
+#include <cstring>
+#include <limits>
+#include <vector>
 
 cppcheck::Platform::Platform()
 {
@@ -36,26 +40,7 @@ cppcheck::Platform::Platform()
 bool cppcheck::Platform::platform(cppcheck::Platform::PlatformType type)
 {
     switch (type) {
-    case Unspecified:
-        platformType = type;
-        sizeof_bool = sizeof(bool);
-        sizeof_short = sizeof(short);
-        sizeof_int = sizeof(int);
-        sizeof_long = sizeof(long);
-        sizeof_long_long = sizeof(long long);
-        sizeof_float = sizeof(float);
-        sizeof_double = sizeof(double);
-        sizeof_long_double = sizeof(long double);
-        sizeof_wchar_t = sizeof(wchar_t);
-        sizeof_size_t = sizeof(std::size_t);
-        sizeof_pointer = sizeof(void *);
-        defaultSign = '\0';
-        char_bit = 8;
-        short_bit = char_bit * sizeof_short;
-        int_bit = char_bit * sizeof_int;
-        long_bit = char_bit * sizeof_long;
-        long_long_bit = char_bit * sizeof_long_long;
-        return true;
+    case Unspecified: // unknown type sizes (sizes etc are set but are not known)
     case Native: // same as system this code was compile on
         platformType = type;
         sizeof_bool = sizeof(bool);
@@ -69,9 +54,10 @@ bool cppcheck::Platform::platform(cppcheck::Platform::PlatformType type)
         sizeof_wchar_t = sizeof(wchar_t);
         sizeof_size_t = sizeof(std::size_t);
         sizeof_pointer = sizeof(void *);
-        {
-            char x = -1;
-            defaultSign = (x < 0) ? 's' : 'u';
+        if (type == Unspecified) {
+            defaultSign = '\0';
+        } else {
+            defaultSign = (std::numeric_limits<char>::is_signed) ? 's' : 'u';
         }
         char_bit = 8;
         short_bit = char_bit * sizeof_short;
@@ -160,20 +146,49 @@ bool cppcheck::Platform::platform(cppcheck::Platform::PlatformType type)
         long_bit = char_bit * sizeof_long;
         long_long_bit = char_bit * sizeof_long_long;
         return true;
+    case PlatformFile:
+        // sizes are not set.
+        return false;
     }
-
     // unsupported platform
     return false;
 }
 
-bool cppcheck::Platform::platformFile(const std::string &filename)
+bool cppcheck::Platform::loadPlatformFile(const char exename[], const std::string &filename)
 {
     // open file..
     tinyxml2::XMLDocument doc;
-    if (doc.LoadFile(filename.c_str()) != tinyxml2::XML_SUCCESS)
-        return false;
+    if (doc.LoadFile(filename.c_str()) != tinyxml2::XML_SUCCESS) {
+        std::vector<std::string> filenames;
+        filenames.push_back(filename + ".xml");
+        if (exename && (std::string::npos != Path::fromNativeSeparators(exename).find('/'))) {
+            filenames.push_back(Path::getPathFromFilename(Path::fromNativeSeparators(exename)) + "platforms/" + filename);
+            filenames.push_back(Path::getPathFromFilename(Path::fromNativeSeparators(exename)) + "platforms/" + filename + ".xml");
+        }
+#ifdef FILESDIR
+        std::string filesdir = FILESDIR;
+        if (!filesdir.empty() && filesdir[filesdir.size()-1] != '/')
+            filesdir += '/';
+        filenames.push_back(filesdir + ("platforms/" + filename));
+        filenames.push_back(filesdir + ("platforms/" + filename + ".xml"));
+#endif
+        bool success = false;
+        for (const std::string & f : filenames) {
+            if (doc.LoadFile(f.c_str()) == tinyxml2::XML_SUCCESS) {
+                success = true;
+                break;
+            }
+        }
+        if (!success)
+            return false;
+    }
 
-    const tinyxml2::XMLElement * const rootnode = doc.FirstChildElement();
+    return loadFromXmlDocument(&doc);
+}
+
+bool cppcheck::Platform::loadFromXmlDocument(const tinyxml2::XMLDocument *doc)
+{
+    const tinyxml2::XMLElement * const rootnode = doc->FirstChildElement();
 
     if (!rootnode || std::strcmp(rootnode->Name(), "platform") != 0)
         return false;
@@ -185,26 +200,28 @@ bool cppcheck::Platform::platformFile(const std::string &filename)
             char_bit = std::atoi(node->GetText());
         else if (std::strcmp(node->Name(), "sizeof") == 0) {
             for (const tinyxml2::XMLElement *sz = node->FirstChildElement(); sz; sz = sz->NextSiblingElement()) {
-                if (std::strcmp(node->Name(), "short") == 0)
-                    sizeof_short = std::atoi(node->GetText());
-                else if (std::strcmp(node->Name(), "int") == 0)
-                    sizeof_int = std::atoi(node->GetText());
-                else if (std::strcmp(node->Name(), "long") == 0)
-                    sizeof_long = std::atoi(node->GetText());
-                else if (std::strcmp(node->Name(), "long-long") == 0)
-                    sizeof_long_long = std::atoi(node->GetText());
-                else if (std::strcmp(node->Name(), "float") == 0)
-                    sizeof_float = std::atoi(node->GetText());
-                else if (std::strcmp(node->Name(), "double") == 0)
-                    sizeof_double = std::atoi(node->GetText());
-                else if (std::strcmp(node->Name(), "long-double") == 0)
-                    sizeof_long_double = std::atoi(node->GetText());
-                else if (std::strcmp(node->Name(), "pointer") == 0)
-                    sizeof_pointer = std::atoi(node->GetText());
-                else if (std::strcmp(node->Name(), "size_t") == 0)
-                    sizeof_size_t = std::atoi(node->GetText());
-                else if (std::strcmp(node->Name(), "wchar_t") == 0)
-                    sizeof_wchar_t = std::atoi(node->GetText());
+                if (std::strcmp(sz->Name(), "short") == 0)
+                    sizeof_short = std::atoi(sz->GetText());
+                else if (std::strcmp(sz->Name(), "bool") == 0)
+                    sizeof_bool = std::atoi(sz->GetText());
+                else if (std::strcmp(sz->Name(), "int") == 0)
+                    sizeof_int = std::atoi(sz->GetText());
+                else if (std::strcmp(sz->Name(), "long") == 0)
+                    sizeof_long = std::atoi(sz->GetText());
+                else if (std::strcmp(sz->Name(), "long-long") == 0)
+                    sizeof_long_long = std::atoi(sz->GetText());
+                else if (std::strcmp(sz->Name(), "float") == 0)
+                    sizeof_float = std::atoi(sz->GetText());
+                else if (std::strcmp(sz->Name(), "double") == 0)
+                    sizeof_double = std::atoi(sz->GetText());
+                else if (std::strcmp(sz->Name(), "long-double") == 0)
+                    sizeof_long_double = std::atoi(sz->GetText());
+                else if (std::strcmp(sz->Name(), "pointer") == 0)
+                    sizeof_pointer = std::atoi(sz->GetText());
+                else if (std::strcmp(sz->Name(), "size_t") == 0)
+                    sizeof_size_t = std::atoi(sz->GetText());
+                else if (std::strcmp(sz->Name(), "wchar_t") == 0)
+                    sizeof_wchar_t = std::atoi(sz->GetText());
             }
         }
     }
@@ -214,5 +231,6 @@ bool cppcheck::Platform::platformFile(const std::string &filename)
     long_bit = char_bit * sizeof_long;
     long_long_bit = char_bit * sizeof_long_long;
 
+    platformType = PlatformFile;
     return true;
 }

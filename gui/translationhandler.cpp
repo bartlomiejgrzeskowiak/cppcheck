@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,6 +29,7 @@
 // Provide own translations for standard buttons. This (garbage) code is needed to enforce them to appear in .ts files even after "lupdate gui.pro"
 static void unused()
 {
+// NOTE: Keeping semi-colons at end of macro for style preference
 #if ((QT_VERSION >= 0x040000)&&(QT_VERSION < 0x050000))
     Q_UNUSED(QT_TRANSLATE_NOOP("QDialogButtonBox", "OK"));
     Q_UNUSED(QT_TRANSLATE_NOOP("QDialogButtonBox", "Cancel"));
@@ -47,30 +48,30 @@ static void unused()
 TranslationHandler::TranslationHandler(QObject *parent) :
     QObject(parent),
     mCurrentLanguage("en"),
-    mTranslator(NULL)
+    mTranslator(nullptr)
 {
     // Add our available languages
     // Keep this list sorted
-    AddTranslation("Chinese (Simplified)", "cppcheck_zh_CN");
-    AddTranslation("Dutch", "cppcheck_nl");
-    AddTranslation("English", "cppcheck_en");
-    AddTranslation("Finnish", "cppcheck_fi");
-    AddTranslation("French", "cppcheck_fr");
-    AddTranslation("German", "cppcheck_de");
-    AddTranslation("Italian", "cppcheck_it");
-    AddTranslation("Japanese", "cppcheck_ja");
-    AddTranslation("Korean", "cppcheck_ko");
-    AddTranslation("Russian", "cppcheck_ru");
-    AddTranslation("Serbian", "cppcheck_sr");
-    AddTranslation("Spanish", "cppcheck_es");
-    AddTranslation("Swedish", "cppcheck_sv");
+    addTranslation("Chinese (Simplified)", "cppcheck_zh_CN");
+    addTranslation("Dutch", "cppcheck_nl");
+    addTranslation("English", "cppcheck_en");
+    addTranslation("Finnish", "cppcheck_fi");
+    addTranslation("French", "cppcheck_fr");
+    addTranslation("German", "cppcheck_de");
+    addTranslation("Italian", "cppcheck_it");
+    addTranslation("Japanese", "cppcheck_ja");
+    addTranslation("Korean", "cppcheck_ko");
+    addTranslation("Russian", "cppcheck_ru");
+    addTranslation("Serbian", "cppcheck_sr");
+    addTranslation("Spanish", "cppcheck_es");
+    addTranslation("Swedish", "cppcheck_sv");
 }
 
 TranslationHandler::~TranslationHandler()
 {
 }
 
-const QStringList TranslationHandler::GetNames() const
+const QStringList TranslationHandler::getNames() const
 {
     QStringList names;
     foreach (TranslationInfo translation, mTranslations) {
@@ -79,7 +80,7 @@ const QStringList TranslationHandler::GetNames() const
     return names;
 }
 
-bool TranslationHandler::SetLanguage(const QString &code)
+bool TranslationHandler::setLanguage(const QString &code)
 {
     bool failure = false;
     QString error;
@@ -90,7 +91,7 @@ bool TranslationHandler::SetLanguage(const QString &code)
         if (mTranslator) {
             qApp->removeTranslator(mTranslator);
             delete mTranslator;
-            mTranslator = NULL;
+            mTranslator = nullptr;
         }
 
         mCurrentLanguage = code;
@@ -98,47 +99,46 @@ bool TranslationHandler::SetLanguage(const QString &code)
     }
 
     //Make sure the translator is otherwise valid
-    int index = GetLanguageIndexByCode(code);
+    int index = getLanguageIndexByCode(code);
     if (index == -1) {
         error = QObject::tr("Unknown language specified!");
         failure = true;
-    }
+    } else {
+        // Make sure there is a translator
+        if (!mTranslator && !failure)
+            mTranslator = new QTranslator(this);
 
-    // Make sure there is a translator
-    if (!mTranslator && !failure)
-        mTranslator = new QTranslator(this);
+        //Load the new language
+        const QString appPath = QFileInfo(QCoreApplication::applicationFilePath()).canonicalPath();
 
-    //Load the new language
-    const QString appPath = QFileInfo(QCoreApplication::applicationFilePath()).canonicalPath();
+        QSettings settings;
+        QString datadir = settings.value("DATADIR").toString();
+        if (datadir.isEmpty())
+            datadir = appPath;
 
-    QSettings settings;
-    QString datadir = settings.value("DATADIR").toString();
-    if (datadir.isEmpty())
-        datadir = appPath;
+        QString translationFile;
+        if (QFile::exists(datadir + "/lang/" + mTranslations[index].mFilename + ".qm"))
+            translationFile = datadir + "/lang/" + mTranslations[index].mFilename + ".qm";
 
-    QString translationFile;
-    if (QFile::exists(datadir + "/lang/" + mTranslations[index].mFilename + ".qm"))
-        translationFile = datadir + "/lang/" + mTranslations[index].mFilename + ".qm";
+        else if (QFile::exists(datadir + "/" + mTranslations[index].mFilename + ".qm"))
+            translationFile = datadir + "/" + mTranslations[index].mFilename + ".qm";
 
-    else if (QFile::exists(datadir + "/" + mTranslations[index].mFilename + ".qm"))
-        translationFile = datadir + "/" + mTranslations[index].mFilename + ".qm";
+        else
+            translationFile = appPath + "/" + mTranslations[index].mFilename + ".qm";
 
-    else
-        translationFile = appPath + "/" + mTranslations[index].mFilename + ".qm";
+        if (!mTranslator->load(translationFile) && !failure) {
+            //If it failed, lets check if the default file exists
+            if (!QFile::exists(translationFile)) {
+                error = QObject::tr("Language file %1 not found!");
+                error = error.arg(translationFile);
+                failure = true;
+            }
 
-    if (!mTranslator->load(translationFile) && !failure) {
-        translationFile += ".qm";
-        //If it failed, lets check if the default file exists
-        if (!QFile::exists(translationFile)) {
-            error = QObject::tr("Language file %1 not found!");
+            //If file exists, there's something wrong with it
+            error = QObject::tr("Failed to load translation for language %1 from file %2");
+            error = error.arg(mTranslations[index].mName);
             error = error.arg(translationFile);
-            failure = true;
         }
-
-        //If file exists, there's something wrong with it
-        error = QObject::tr("Failed to load translation for language %1 from file %2");
-        error = error.arg(mTranslations[index].mName);
-        error = error.arg(translationFile);
     }
 
     if (failure) {
@@ -162,19 +162,19 @@ bool TranslationHandler::SetLanguage(const QString &code)
     return true;
 }
 
-QString TranslationHandler::GetCurrentLanguage() const
+QString TranslationHandler::getCurrentLanguage() const
 {
     return mCurrentLanguage;
 }
 
-QString TranslationHandler::SuggestLanguage() const
+QString TranslationHandler::suggestLanguage() const
 {
     //Get language from system locale's name ie sv_SE or zh_CN
     QString language = QLocale::system().name();
     //qDebug()<<"Your language is"<<language;
 
     //And see if we can find it from our list of language files
-    int index = GetLanguageIndexByCode(language);
+    int index = getLanguageIndexByCode(language);
 
     //If nothing found, return English
     if (index < 0) {
@@ -184,7 +184,7 @@ QString TranslationHandler::SuggestLanguage() const
     return language;
 }
 
-void TranslationHandler::AddTranslation(const char *name, const char *filename)
+void TranslationHandler::addTranslation(const char *name, const char *filename)
 {
     TranslationInfo info;
     info.mName = name;
@@ -194,7 +194,7 @@ void TranslationHandler::AddTranslation(const char *name, const char *filename)
     mTranslations.append(info);
 }
 
-int TranslationHandler::GetLanguageIndexByCode(const QString &code) const
+int TranslationHandler::getLanguageIndexByCode(const QString &code) const
 {
     int index = -1;
     for (int i = 0; i < mTranslations.size(); i++) {

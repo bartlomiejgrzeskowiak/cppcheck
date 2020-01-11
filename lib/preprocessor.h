@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,13 +22,15 @@
 //---------------------------------------------------------------------------
 
 #include "config.h"
-#include "simplecpp.h"
 
-#include <map>
+#include <atomic>
+#include <simplecpp.h>
 #include <istream>
-#include <string>
 #include <list>
+#include <map>
 #include <set>
+#include <string>
+#include <vector>
 
 class ErrorLogger;
 class Settings;
@@ -80,11 +82,11 @@ public:
     /** character that is inserted in expanded macros */
     static char macroChar;
 
-    Preprocessor(Settings& settings, ErrorLogger *errorLogger = nullptr);
+    explicit Preprocessor(Settings& settings, ErrorLogger *errorLogger = nullptr);
     virtual ~Preprocessor();
 
-    static bool missingIncludeFlag;
-    static bool missingSystemIncludeFlag;
+    static std::atomic<bool> missingIncludeFlag;
+    static std::atomic<bool> missingSystemIncludeFlag;
 
     void inlineSuppressions(const simplecpp::TokenList &tokens);
 
@@ -92,12 +94,14 @@ public:
 
     /** list of all directives met while preprocessing file */
     const std::list<Directive> &getDirectives() const {
-        return directives;
+        return mDirectives;
     }
 
     std::set<std::string> getConfigs(const simplecpp::TokenList &tokens) const;
 
-    void loadFiles(const simplecpp::TokenList &rawtokens, std::vector<std::string> &files);
+    void handleErrors(const simplecpp::OutputList &outputList, bool throwError);
+
+    bool loadFiles(const simplecpp::TokenList &rawtokens, std::vector<std::string> &files);
 
     void removeComments();
 
@@ -135,6 +139,8 @@ public:
      */
     void preprocess(std::istream &srcCodeStream, std::string &processedFile, std::list<std::string> &resultConfigurations, const std::string &filename, const std::list<std::string> &includePaths);
 
+    simplecpp::TokenList preprocess(const simplecpp::TokenList &tokens1, const std::string &cfg, std::vector<std::string> &files, bool throwError = false);
+
     std::string getcode(const simplecpp::TokenList &tokens1, const std::string &cfg, std::vector<std::string> &files, const bool writeLocations);
 
     /**
@@ -160,7 +166,20 @@ public:
     bool validateCfg(const std::string &cfg, const std::list<simplecpp::MacroUsage> &macroUsageList);
     void validateCfgError(const std::string &file, const unsigned int line, const std::string &cfg, const std::string &macro);
 
+    /**
+     * Calculate CRC32 checksum. Using toolinfo, tokens1, filedata.
+     *
+     * @param tokens1    Sourcefile tokens
+     * @param toolinfo   Arbitrary extra toolinfo
+     * @return CRC32 checksum
+     */
+    unsigned int calculateChecksum(const simplecpp::TokenList &tokens1, const std::string &toolinfo) const;
+
+    void simplifyPragmaAsm(simplecpp::TokenList *tokenList);
+
 private:
+
+    static void simplifyPragmaAsmPrivate(simplecpp::TokenList *tokenList);
 
     /**
      * Remove space that has new line character on left or right side of it.
@@ -176,7 +195,7 @@ public:
     static void getErrorMessages(ErrorLogger *errorLogger, const Settings *settings);
 
     void setFile0(const std::string &f) {
-        file0 = f;
+        mFile0 = f;
     }
 
     /**
@@ -190,16 +209,16 @@ private:
     void missingInclude(const std::string &filename, unsigned int linenr, const std::string &header, HeaderTypes headerType);
     void error(const std::string &filename, unsigned int linenr, const std::string &msg);
 
-    Settings& _settings;
-    ErrorLogger *_errorLogger;
+    Settings& mSettings;
+    ErrorLogger *mErrorLogger;
 
     /** list of all directives met while preprocessing file */
-    std::list<Directive> directives;
+    std::list<Directive> mDirectives;
 
-    std::map<std::string, simplecpp::TokenList *> tokenlists;
+    std::map<std::string, simplecpp::TokenList *> mTokenLists;
 
     /** filename for cpp/c file - useful when reporting errors */
-    std::string file0;
+    std::string mFile0;
 };
 
 /// @}

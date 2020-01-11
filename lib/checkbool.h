@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,17 +22,21 @@
 #define checkboolH
 //---------------------------------------------------------------------------
 
-#include "config.h"
 #include "check.h"
+#include "config.h"
 
-class Function;
-class Variable;
+#include <string>
+
+class ErrorLogger;
+class Settings;
+class Token;
+class Tokenizer;
 
 /// @addtogroup Checks
 /// @{
 
 
-/** @brief checks dealing with suspicous usage of boolean type (not for evaluating conditions) */
+/** @brief checks dealing with suspicious usage of boolean type (not for evaluating conditions) */
 
 class CPPCHECKLIB CheckBool : public Check {
 public:
@@ -46,7 +50,7 @@ public:
     }
 
     /** @brief Run checks against the normal token list */
-    void runChecks(const Tokenizer *tokenizer, const Settings *settings, ErrorLogger *errorLogger) {
+    void runChecks(const Tokenizer *tokenizer, const Settings *settings, ErrorLogger *errorLogger) OVERRIDE {
         CheckBool checkBool(tokenizer, settings, errorLogger);
 
         // Checks
@@ -54,13 +58,7 @@ public:
         checkBool.checkComparisonOfBoolWithInt();
         checkBool.checkAssignBoolToFloat();
         checkBool.pointerArithBool();
-    }
-
-    /** @brief Run checks against the simplified token list */
-    void runSimplifiedChecks(const Tokenizer *tokenizer, const Settings *settings, ErrorLogger *errorLogger) {
-        CheckBool checkBool(tokenizer, settings, errorLogger);
-
-        // Checks
+        checkBool.returnValueOfFunctionReturningBool();
         checkBool.checkComparisonOfFuncReturningBool();
         checkBool.checkComparisonOfBoolWithBool();
         checkBool.checkIncrementBoolean();
@@ -96,6 +94,9 @@ public:
     void pointerArithBool();
     void pointerArithBoolCond(const Token *tok);
 
+    /** @brief %Check if a function returning bool returns an integer other than 0 or 1 */
+    void returnValueOfFunctionReturningBool();
+
 private:
     // Error messages..
     void comparisonOfFuncReturningBoolError(const Token *tok, const std::string &expression);
@@ -105,11 +106,12 @@ private:
     void comparisonOfBoolWithInvalidComparator(const Token *tok, const std::string &expression);
     void assignBoolToPointerError(const Token *tok);
     void assignBoolToFloatError(const Token *tok);
-    void bitwiseOnBooleanError(const Token *tok, const std::string &varname, const std::string &op);
+    void bitwiseOnBooleanError(const Token *tok, const std::string &expression, const std::string &op);
     void comparisonOfBoolExpressionWithIntError(const Token *tok, bool n0o1);
     void pointerArithBoolError(const Token *tok);
+    void returnValueBoolError(const Token *tok);
 
-    void getErrorMessages(ErrorLogger *errorLogger, const Settings *settings) const {
+    void getErrorMessages(ErrorLogger *errorLogger, const Settings *settings) const OVERRIDE {
         CheckBool c(nullptr, settings, errorLogger);
 
         c.assignBoolToPointerError(nullptr);
@@ -118,16 +120,18 @@ private:
         c.comparisonOfTwoFuncsReturningBoolError(nullptr, "func_name1", "func_name2");
         c.comparisonOfBoolWithBoolError(nullptr, "var_name");
         c.incrementBooleanError(nullptr);
-        c.bitwiseOnBooleanError(nullptr, "varname", "&&");
+        c.bitwiseOnBooleanError(nullptr, "expression", "&&");
         c.comparisonOfBoolExpressionWithIntError(nullptr, true);
         c.pointerArithBoolError(nullptr);
+        c.comparisonOfBoolWithInvalidComparator(nullptr, "expression");
+        c.returnValueBoolError(nullptr);
     }
 
     static std::string myName() {
         return "Boolean";
     }
 
-    std::string classInfo() const {
+    std::string classInfo() const OVERRIDE {
         return "Boolean type checks\n"
                "- using increment on boolean\n"
                "- comparison of a boolean expression with an integer other than 0 or 1\n"
@@ -135,7 +139,8 @@ private:
                "- comparison of a boolean value with boolean value using relational operator\n"
                "- using bool in bitwise expression\n"
                "- pointer addition in condition (either dereference is forgot or pointer overflow is required to make the condition false)\n"
-               "- Assigning bool value to pointer or float\n";
+               "- Assigning bool value to pointer or float\n"
+               "- Returning an integer other than 0 or 1 from a function with boolean return value\n";
     }
 };
 /// @}

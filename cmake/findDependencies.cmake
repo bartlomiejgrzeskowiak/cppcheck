@@ -1,4 +1,11 @@
-find_package(Qt4 4.6.1 COMPONENTS QtCore QtGui QtXML)
+if (BUILD_GUI)
+    if (NOT WITH_QCHART)
+        find_package(Qt5 COMPONENTS Core Gui Widgets PrintSupport LinguistTools REQUIRED)
+    else()
+        find_package(Qt5 COMPONENTS Core Gui Widgets PrintSupport LinguistTools Charts REQUIRED)
+    endif()
+endif()
+
 if (HAVE_RULES)
     find_library(PCRE pcre)
     if (NOT PCRE)
@@ -16,4 +23,3 @@ if (NOT ${USE_MATCHCOMPILER_OPT} STREQUAL "Off")
         set(USE_MATCHCOMPILER_OPT "Off")
     endif()
 endif()
-

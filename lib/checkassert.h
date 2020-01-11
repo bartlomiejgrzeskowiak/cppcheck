@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,8 +22,16 @@
 #define checkassertH
 //---------------------------------------------------------------------------
 
-#include "config.h"
 #include "check.h"
+#include "config.h"
+
+#include <string>
+
+class ErrorLogger;
+class Scope;
+class Settings;
+class Token;
+class Tokenizer;
 
 /// @addtogroup Checks
 /// @{
@@ -41,22 +49,23 @@ public:
         : Check(myName(), tokenizer, settings, errorLogger) {
     }
 
-    virtual void runSimplifiedChecks(const Tokenizer *tokenizer, const Settings *settings, ErrorLogger *errorLogger) {
-        CheckAssert check(tokenizer, settings, errorLogger);
-        check.assertWithSideEffects();
+    /** run checks, the token list is not simplified */
+    void runChecks(const Tokenizer *tokenizer, const Settings *settings, ErrorLogger *errorLogger) OVERRIDE {
+        CheckAssert checkAssert(tokenizer, settings, errorLogger);
+        checkAssert.assertWithSideEffects();
     }
 
     void assertWithSideEffects();
 
 protected:
-    void checkVariableAssignment(const Token* tmp, const Scope *assertionScope);
+    void checkVariableAssignment(const Token* assignTok, const Scope *assertionScope);
     static bool inSameScope(const Token* returnTok, const Token* assignTok);
 
 private:
     void sideEffectInAssertError(const Token *tok, const std::string& functionName);
     void assignmentInAssertError(const Token *tok, const std::string &varname);
 
-    void getErrorMessages(ErrorLogger *errorLogger, const Settings *settings) const {
+    void getErrorMessages(ErrorLogger *errorLogger, const Settings *settings) const OVERRIDE {
         CheckAssert c(nullptr, settings, errorLogger);
         c.sideEffectInAssertError(nullptr, "function");
         c.assignmentInAssertError(nullptr, "var");
@@ -66,7 +75,7 @@ private:
         return "Assert";
     }
 
-    std::string classInfo() const {
+    std::string classInfo() const OVERRIDE {
         return "Warn if there are side effects in assert statements (since this cause different behaviour in debug/release builds).\n";
     }
 };

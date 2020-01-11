@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,6 +21,8 @@
 #define standardsH
 //---------------------------------------------------------------------------
 
+#include <string>
+
 /// @addtogroup Core
 /// @{
 
@@ -31,16 +33,13 @@
  */
 struct Standards {
     /** C code C89/C99/C11 standard */
-    enum cstd_t { C89, C99, C11 } c;
+    enum cstd_t { C89, C99, C11, CLatest=C11 } c;
 
     /** C++ code standard */
-    enum cppstd_t { CPP03, CPP11 } cpp;
-
-    /** Code is posix */
-    bool posix;
+    enum cppstd_t { CPP03, CPP11, CPP14, CPP17, CPP20, CPPLatest=CPP20 } cpp;
 
     /** This constructor clear all the variables **/
-    Standards() : c(C11), cpp(CPP11), posix(false) {}
+    Standards() : c(C11), cpp(CPPLatest) {}
 
     bool setC(const std::string& str) {
         if (str == "c89" || str == "C89") {
@@ -57,6 +56,17 @@ struct Standards {
         }
         return false;
     }
+    const std::string getC() const {
+        switch (c) {
+        case C89:
+            return "c89";
+        case C99:
+            return "c99";
+        case C11:
+            return "c11";
+        }
+        return "";
+    }
     bool setCPP(const std::string& str) {
         if (str == "c++03" || str == "C++03") {
             cpp = CPP03;
@@ -66,7 +76,34 @@ struct Standards {
             cpp = CPP11;
             return true;
         }
+        if (str == "c++14" || str == "C++14") {
+            cpp = CPP14;
+            return true;
+        }
+        if (str == "c++17" || str == "C++17") {
+            cpp = CPP17;
+            return true;
+        }
+        if (str == "c++20" || str == "C++20") {
+            cpp = CPP20;
+            return true;
+        }
         return false;
+    }
+    const std::string getCPP() const {
+        switch (cpp) {
+        case CPP03:
+            return "c++03";
+        case CPP11:
+            return "c++11";
+        case CPP14:
+            return "c++14";
+        case CPP17:
+            return "c++17";
+        case CPP20:
+            return "c++20";
+        }
+        return "";
     }
 };
 

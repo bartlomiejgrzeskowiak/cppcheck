@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2018 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,26 +28,26 @@ TxtReport::~TxtReport()
 {
 }
 
-bool TxtReport::Create()
+bool TxtReport::create()
 {
-    if (Report::Create()) {
-        mTxtWriter.setDevice(Report::GetFile());
+    if (Report::create()) {
+        mTxtWriter.setDevice(Report::getFile());
         return true;
     }
     return false;
 }
 
-void TxtReport::WriteHeader()
+void TxtReport::writeHeader()
 {
     // No header for txt report
 }
 
-void TxtReport::WriteFooter()
+void TxtReport::writeFooter()
 {
     // No footer for txt report
 }
 
-void TxtReport::WriteError(const ErrorItem &error)
+void TxtReport::writeError(const ErrorItem &error)
 {
     /*
     Error example from the core program in text
@@ -56,14 +56,14 @@ void TxtReport::WriteError(const ErrorItem &error)
 
     QString line;
 
-    for (int i = 0; i < error.lines.size(); i++) {
-        const QString file = QDir::toNativeSeparators(error.files[i]);
-        line += QString("[%1:%2]").arg(file).arg(error.lines[i]);
-        if (i < error.lines.size() - 1 && !error.lines.isEmpty()) {
+    for (int i = 0; i < error.errorPath.size(); i++) {
+        const QString file = QDir::toNativeSeparators(error.errorPath[i].file);
+        line += QString("[%1:%2]").arg(file).arg(error.errorPath[i].line);
+        if (i < error.errorPath.size() - 1) {
             line += " -> ";
         }
 
-        if (i == error.lines.size() - 1) {
+        if (i == error.errorPath.size() - 1) {
             line += ": ";
         }
     }

@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,11 +22,15 @@
 #define checksizeofH
 //---------------------------------------------------------------------------
 
-#include "config.h"
 #include "check.h"
+#include "config.h"
 
-class Function;
-class Variable;
+#include <string>
+
+class ErrorLogger;
+class Settings;
+class Token;
+class Tokenizer;
 
 /// @addtogroup Checks
 /// @{
@@ -46,12 +50,13 @@ public:
     }
 
     /** @brief Run checks against the normal token list */
-    void runChecks(const Tokenizer* tokenizer, const Settings* settings, ErrorLogger* errorLogger) {
+    void runChecks(const Tokenizer* tokenizer, const Settings* settings, ErrorLogger* errorLogger) OVERRIDE {
         CheckSizeof checkSizeof(tokenizer, settings, errorLogger);
 
         // Checks
         checkSizeof.sizeofsizeof();
         checkSizeof.sizeofCalculation();
+        checkSizeof.sizeofFunction();
         checkSizeof.suspiciousSizeofCalculation();
         checkSizeof.checkSizeofForArrayParameter();
         checkSizeof.checkSizeofForPointerSize();
@@ -59,15 +64,14 @@ public:
         checkSizeof.sizeofVoid();
     }
 
-    /** @brief Run checks against the simplified token list */
-    void runSimplifiedChecks(const Tokenizer*, const Settings*, ErrorLogger*) {
-    }
-
     /** @brief %Check for 'sizeof sizeof ..' */
     void sizeofsizeof();
 
     /** @brief %Check for calculations inside sizeof */
     void sizeofCalculation();
+
+    /** @brief %Check for function call inside sizeof */
+    void sizeofFunction();
 
     /** @brief %Check for suspicious calculations with sizeof results */
     void suspiciousSizeofCalculation();
@@ -88,6 +92,7 @@ private:
     // Error messages..
     void sizeofsizeofError(const Token* tok);
     void sizeofCalculationError(const Token* tok, bool inconclusive);
+    void sizeofFunctionError(const Token* tok);
     void multiplySizeofError(const Token* tok);
     void divideSizeofError(const Token* tok);
     void sizeofForArrayParameterError(const Token* tok);
@@ -98,7 +103,7 @@ private:
     void sizeofDereferencedVoidPointerError(const Token *tok, const std::string &varname);
     void arithOperationsOnVoidPointerError(const Token* tok, const std::string &varname, const std::string &vartype);
 
-    void getErrorMessages(ErrorLogger* errorLogger, const Settings* settings) const {
+    void getErrorMessages(ErrorLogger* errorLogger, const Settings* settings) const OVERRIDE {
         CheckSizeof c(nullptr, settings, errorLogger);
 
         c.sizeofForArrayParameterError(nullptr);
@@ -107,6 +112,7 @@ private:
         c.sizeofForNumericParameterError(nullptr);
         c.sizeofsizeofError(nullptr);
         c.sizeofCalculationError(nullptr, false);
+        c.sizeofFunctionError(nullptr);
         c.multiplySizeofError(nullptr);
         c.divideSizeofError(nullptr);
         c.sizeofVoidError(nullptr);
@@ -118,13 +124,14 @@ private:
         return "Sizeof";
     }
 
-    std::string classInfo() const {
+    std::string classInfo() const OVERRIDE {
         return "sizeof() usage checks\n"
                "- sizeof for array given as function argument\n"
                "- sizeof for numeric given as function argument\n"
                "- using sizeof(pointer) instead of the size of pointed data\n"
                "- look for 'sizeof sizeof ..'\n"
                "- look for calculations inside sizeof()\n"
+               "- look for function calls inside sizeof()\n"
                "- look for suspicious calculations with sizeof()\n"
                "- using 'sizeof(void)' which is undefined\n";
     }

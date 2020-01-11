@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,11 +16,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
-#include "tokenize.h"
 #include "checkclass.h"
+#include "platform.h"
+#include "settings.h"
 #include "testsuite.h"
+#include "tokenize.h"
 
+#include <simplecpp.h>
+#include <map>
+#include <vector>
 
 class TestUnusedPrivateFunction : public TestFixture {
 public:
@@ -30,7 +34,7 @@ public:
 private:
     Settings settings;
 
-    void run() {
+    void run() OVERRIDE {
         settings.addEnabled("style");
 
         TEST_CASE(test1);
@@ -76,6 +80,8 @@ private:
         TEST_CASE(hierarchie_loop); // ticket 5590
 
         TEST_CASE(staticVariable); //ticket #5566
+
+        TEST_CASE(templateSimplification); //ticket #6183
     }
 
 
@@ -85,11 +91,20 @@ private:
 
         settings.platform(platform);
 
+        // Raw tokens..
+        std::vector<std::string> files(1, "test.cpp");
+        std::istringstream istr(code);
+        const simplecpp::TokenList tokens1(istr, files, files[0]);
+
+        // Preprocess..
+        simplecpp::TokenList tokens2(files);
+        std::map<std::string, simplecpp::TokenList*> filedata;
+        simplecpp::preprocess(tokens2, tokens1, files, filedata, simplecpp::DUI());
+
         // Tokenize..
         Tokenizer tokenizer(&settings, this);
-        std::istringstream istr(code);
-        tokenizer.tokenize(istr, "test.cpp");
-        tokenizer.simplifyTokenList2();
+        tokenizer.createTokens(&tokens2);
+        tokenizer.simplifyTokens1("");
 
         // Check for unused private functions..
         CheckClass checkClass(&tokenizer, &settings, this);
@@ -115,7 +130,7 @@ private:
 
         ASSERT_EQUALS("[test.cpp:4]: (style) Unused private function: 'Fred::f'\n", errout.str());
 
-        check("#file \"p.h\"\n"
+        check("#line 1 \"p.h\"\n"
               "class Fred\n"
               "{\n"
               "private:\n"
@@ -124,7 +139,7 @@ private:
               "    Fred();\n"
               "};\n"
               "\n"
-              "#endfile\n"
+              "#line 1 \"p.cpp\"\n"
               "Fred::Fred()\n"
               "{ }\n"
               "\n"
@@ -133,7 +148,7 @@ private:
 
         ASSERT_EQUALS("[p.h:4]: (style) Unused private function: 'Fred::f'\n", errout.str());
 
-        check("#file \"p.h\"\n"
+        check("#line 1 \"p.h\"\n"
               "class Fred\n"
               "{\n"
               "private:\n"
@@ -141,7 +156,7 @@ private:
               "};\n"
               "\n"
               "\n"
-              "#endfile\n"
+              "#line 1 \"p.cpp\"\n"
               "\n"
               "void Fred::f()\n"
               "{\n"
@@ -149,7 +164,7 @@ private:
         ASSERT_EQUALS("[p.h:4]: (style) Unused private function: 'Fred::f'\n", errout.str());
 
         // Don't warn about include files which implementation we don't see
-        check("#file \"p.h\"\n"
+        check("#line 1 \"p.h\"\n"
               "class Fred\n"
               "{\n"
               "private:\n"
@@ -157,7 +172,7 @@ private:
               "void g() {}\n"
               "};\n"
               "\n"
-              "#endfile\n"
+              "#line 1 \"p.cpp\"\n"
               "\n"
               "int main()\n"
               "{\n"
@@ -779,6 +794,29 @@ private:
               "int Foo::i = sth();"
               "int i = F();");
         ASSERT_EQUALS("[test.cpp:3]: (style) Unused private function: 'Foo::F'\n", errout.str());
+    }
+
+    void templateSimplification() { //ticket #6183
+        check("class CTest {\n"
+              "public:\n"
+              "    template <typename T>\n"
+              "    static void Greeting(T val) {\n"
+              "        std::cout << val << std::endl;\n"
+              "    }\n"
+              "private:\n"
+              "    static void SayHello() {\n"
+              "        std::cout << \"Hello World!\" << std::endl;\n"
+              "    }\n"
+              "};\n"
+              "template<>\n"
+              "void CTest::Greeting(bool) {\n"
+              "    CTest::SayHello();\n"
+              "}\n"
+              "int main() {\n"
+              "    CTest::Greeting<bool>(true);\n"
+              "    return 0;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
     }
 };
 

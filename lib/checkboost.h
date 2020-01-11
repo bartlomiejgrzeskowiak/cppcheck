@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2019 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,9 +22,14 @@
 #define checkboostH
 //---------------------------------------------------------------------------
 
-#include "config.h"
 #include "check.h"
+#include "config.h"
+#include "tokenize.h"
 
+#include <string>
+
+class ErrorLogger;
+class Settings;
 class Token;
 
 /// @addtogroup Checks
@@ -43,13 +48,12 @@ public:
         : Check(myName(), tokenizer, settings, errorLogger) {
     }
 
-    /** Simplified checks. The token list is simplified. */
-    void runSimplifiedChecks(const Tokenizer *tokenizer, const Settings *settings, ErrorLogger *errorLogger) {
+    /** @brief Run checks against the normal token list */
+    void runChecks(const Tokenizer *tokenizer, const Settings *settings, ErrorLogger *errorLogger) OVERRIDE {
         if (!tokenizer->isCPP())
             return;
 
         CheckBoost checkBoost(tokenizer, settings, errorLogger);
-
         checkBoost.checkBoostForeachModification();
     }
 
@@ -59,16 +63,16 @@ public:
 private:
     void boostForeachError(const Token *tok);
 
-    void getErrorMessages(ErrorLogger *errorLogger, const Settings *settings) const {
-        CheckBoost c(0, settings, errorLogger);
-        c.boostForeachError(0);
+    void getErrorMessages(ErrorLogger *errorLogger, const Settings *settings) const OVERRIDE {
+        CheckBoost c(nullptr, settings, errorLogger);
+        c.boostForeachError(nullptr);
     }
 
     static std::string myName() {
         return "Boost usage";
     }
 
-    std::string classInfo() const {
+    std::string classInfo() const OVERRIDE {
         return "Check for invalid usage of Boost:\n"
                "- container modification during BOOST_FOREACH\n";
     }
